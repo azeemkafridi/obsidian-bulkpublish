@@ -1,0 +1,139 @@
+/* BulkPublish for Obsidian — #FA8112 brand accents */
+
+.bp-modal {
+	--bp-accent: #fa8112;
+	max-width: 560px;
+	width: 90vw;
+}
+
+.bp-section {
+	margin-bottom: 14px;
+}
+
+.bp-label {
+	display: block;
+	font-weight: 600;
+	font-size: 0.85em;
+	margin-bottom: 4px;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.bp-caption {
+	width: 100%;
+	resize: vertical;
+	font-family: inherit;
+	border-radius: 6px;
+}
+
+.bp-caption:focus {
+	border-color: var(--bp-accent);
+	box-shadow: 0 0 0 2px rgba(250, 129, 18, 0.25);
+}
+
+.bp-counter {
+	text-align: right;
+	font-size: 0.8em;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+.bp-channels {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.bp-channel-row,
+.bp-media-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.bp-channel-row input[type="checkbox"]:checked,
+.bp-media-row input[type="checkbox"]:checked {
+	accent-color: var(--bp-accent);
+}
+
+.bp-media-name {
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+}
+
+.bp-schedule {
+	width: 100%;
+}
+
+.bp-hint {
+	font-size: 0.8em;
+	color: var(--text-muted);
+	margin-top: 3px;
+}
+
+.bp-validation:not(:empty) {
+	margin-bottom: 12px;
+}
+
+.bp-error-text {
+	color: var(--text-error);
+	font-size: 0.9em;
+}
+
+.bp-preview {
+	border: 1px solid rgba(250, 129, 18, 0.45);
+	border-left: 3px solid var(--bp-accent);
+	border-radius: 6px;
+	padding: 10px 12px;
+	background: rgba(250, 129, 18, 0.06);
+	font-size: 0.9em;
+}
+
+.bp-preview-title {
+	font-weight: 700;
+	color: var(--bp-accent);
+	margin-bottom: 6px;
+}
+
+.bp-results:not(:empty) {
+	margin-bottom: 12px;
+	padding: 10px 12px;
+	border-radius: 6px;
+	background: var(--background-secondary);
+	font-size: 0.9em;
+}
+
+.bp-result-row {
+	margin-bottom: 4px;
+}
+
+.bp-result-ok {
+	color: var(--text-success, #4caf50);
+}
+
+.bp-result-error {
+	margin-left: 20px;
+}
+
+.bp-results a {
+	color: var(--bp-accent);
+}
+
+.bp-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.bp-publish-btn {
+	background-color: var(--bp-accent) !important;
+	color: #fff !important;
+	font-weight: 600;
+}
+
+.bp-publish-btn:disabled {
+	opacity: 0.6;
+	cursor: default;
+}

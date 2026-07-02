@@ -1,0 +1,33 @@
+{
+	"name": "obsidian-bulkpublish",
+	"version": "1.0.0",
+	"description": "BulkPublish for Obsidian — publish notes to 11 social media platforms from your vault",
+	"keywords": [
+		"obsidian",
+		"obsidian-plugin",
+		"social-media",
+		"publishing",
+		"scheduling",
+		"bulkpublish"
+	],
+	"license": "MIT",
+	"homepage": "https://github.com/azeemkafridi/obsidian-bulkpublish",
+	"author": {
+		"name": "BulkPublish",
+		"email": "obsidian@bulkpublish.com",
+		"url": "https://bulkpublish.com"
+	},
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "node esbuild.config.mjs production",
+		"build:lib": "esbuild src/lib.ts --bundle --format=esm --platform=neutral --outfile=tests/build/lib.mjs",
+		"test": "npm run build:lib && node --test tests/lib.test.mjs"
+	},
+	"devDependencies": {
+		"esbuild": "^0.24.0",
+		"obsidian": "latest",
+		"typescript": "^5.5.0",
+		"@types/node": "^22.0.0"
+	}
+}
