@@ -477,12 +477,14 @@ class PublishModal extends Modal {
 
 		if (this.quota) {
 			const { limits, usage, plan } = this.quota;
+			// Limits are -1 on unlimited plans (business): show ∞, never warn.
+			const fmtLimit = (n: number) => (n < 0 ? "∞" : String(n));
 			this.previewEl.createDiv({
-				text: `Plan: ${plan} — posts today ${usage.postsToday}/${limits.postsPerDay}, this month ${usage.postsThisMonth}/${limits.postsPerMonth}`,
+				text: `Plan: ${plan} — posts today ${usage.postsToday}/${fmtLimit(limits.postsPerDay)}, this month ${usage.postsThisMonth}/${fmtLimit(limits.postsPerMonth)}`,
 			});
 			if (
-				usage.postsToday >= limits.postsPerDay ||
-				usage.postsThisMonth >= limits.postsPerMonth
+				(limits.postsPerDay >= 0 && usage.postsToday >= limits.postsPerDay) ||
+				(limits.postsPerMonth >= 0 && usage.postsThisMonth >= limits.postsPerMonth)
 			) {
 				this.previewEl.createDiv({
 					cls: "bp-error-text",
