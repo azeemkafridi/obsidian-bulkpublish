@@ -19,6 +19,9 @@ export const CHAR_LIMITS: Record<string, number> = {
 	tiktok: 2200,
 	youtube: 5000,
 	facebook: 63206,
+	reddit: 40000,
+	discord: 2000,
+	telegram: 4096,
 };
 
 export const PLATFORM_LABELS: Record<string, string> = {
@@ -33,6 +36,9 @@ export const PLATFORM_LABELS: Record<string, string> = {
 	tiktok: "TikTok",
 	youtube: "YouTube",
 	facebook: "Facebook",
+	reddit: "Reddit",
+	discord: "Discord",
+	telegram: "Telegram",
 };
 
 export function platformLabel(platform: string): string {

@@ -1,10 +1,10 @@
 # BulkPublish for Obsidian
 
-Publish the current note — or just a selection — to 11 social media platforms straight from your vault, powered by [BulkPublish](https://bulkpublish.com).
+Publish the current note — or just a selection — to 14 social media platforms straight from your vault, powered by [BulkPublish](https://bulkpublish.com).
 
 - **Two commands**: *Publish note to social…* and *Publish selection to social…*
 - **Caption prefilled** from the note (frontmatter removed, markdown optionally stripped to plain text)
-- **Channel checkboxes** for every connected account (X, LinkedIn, Facebook, Instagram, Threads, Bluesky, Mastodon, Pinterest, TikTok, YouTube, Google Business Profile)
+- **Channel checkboxes** for every connected account (X, LinkedIn, Facebook, Instagram, Threads, Bluesky, Mastodon, Pinterest, TikTok, YouTube, Google Business Profile, Reddit, Discord, Telegram)
 - **Scheduling** via a date/time picker or frontmatter
 - **Embedded images/videos** (`![[photo.png]]`) detected and uploaded with the post — pick which ones to include
 - **"Before you publish" panel**: posts today/this month vs your plan limits, plus an X cost estimate and credit balance
