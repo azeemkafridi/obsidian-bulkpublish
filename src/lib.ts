@@ -384,6 +384,76 @@ export function resolveChannels(
 }
 
 // ---------------------------------------------------------------------------
+// Channel sets (saved channel groups — max 50 per org, names unique per org)
+// ---------------------------------------------------------------------------
+
+export interface ChannelSet {
+	id: number;
+	name: string;
+	channelIds: number[];
+}
+
+/**
+ * Resolve frontmatter/settings names to channel IDs, checking channel-set
+ * names first (exact, case-insensitive), then falling back to platform /
+ * account-name matching (resolveChannels). A set expands to its channelIds,
+ * filtered to channels that exist and are active.
+ */
+export function resolveTargets(
+	names: string[],
+	channels: Channel[],
+	sets: ChannelSet[]
+): { channelIds: string[]; unmatched: string[] } {
+	const channelIds: string[] = [];
+	const unmatched: string[] = [];
+	const activeIds = new Set(channels.filter((c) => c.isActive).map((c) => c.id));
+	for (const raw of names) {
+		const name = raw.toLowerCase().trim();
+		const set = sets.find((s) => s.name.toLowerCase().trim() === name);
+		if (set) {
+			const ids = set.channelIds.map(String).filter((id) => activeIds.has(id));
+			if (ids.length === 0) {
+				unmatched.push(raw);
+			} else {
+				for (const id of ids) {
+					if (!channelIds.includes(id)) channelIds.push(id);
+				}
+			}
+			continue;
+		}
+		const r = resolveChannels([raw], channels);
+		if (r.channelIds.length === 0) {
+			unmatched.push(raw);
+		} else {
+			for (const id of r.channelIds) {
+				if (!channelIds.includes(id)) channelIds.push(id);
+			}
+		}
+	}
+	return { channelIds, unmatched };
+}
+
+// ---------------------------------------------------------------------------
+// Multipart upload part math (part size is fixed by the server: 10 MB)
+// ---------------------------------------------------------------------------
+
+export interface UploadPart {
+	partNumber: number; // 1-based
+	start: number; // byte offset, inclusive
+	end: number; // byte offset, exclusive
+}
+
+/** Split a file of sizeBytes into sequential parts of partSize (last part may be smaller). */
+export function computeParts(sizeBytes: number, partSize: number): UploadPart[] {
+	if (sizeBytes <= 0 || partSize <= 0) return [];
+	const parts: UploadPart[] = [];
+	for (let start = 0, n = 1; start < sizeBytes; start += partSize, n++) {
+		parts.push({ partNumber: n, start, end: Math.min(start + partSize, sizeBytes) });
+	}
+	return parts;
+}
+
+// ---------------------------------------------------------------------------
 // Caption assembly
 // ---------------------------------------------------------------------------
 

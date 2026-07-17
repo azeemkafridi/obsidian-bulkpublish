@@ -14,6 +14,8 @@ import {
 	parseScheduleInput,
 	platformLabel,
 	resolveChannels,
+	resolveTargets,
+	computeParts,
 	splitFrontmatter,
 	stripMarkdown,
 	validateCharLimits,
@@ -326,4 +328,70 @@ test("resolveChannels: dedupes ids", () => {
 test("platformLabel: known and unknown", () => {
 	assert.equal(platformLabel("gmb"), "Google Business Profile");
 	assert.equal(platformLabel("newnet"), "newnet");
+});
+
+// ---------------------------------------------------------------------------
+// resolveTargets (channel sets)
+// ---------------------------------------------------------------------------
+
+const sets = [
+	{ id: 10, name: "Launch Blast", channelIds: [1, 3, 4] },
+	{ id: 11, name: "x", channelIds: [3] }, // set name shadows a platform name
+	{ id: 12, name: "Dead Set", channelIds: [4] }, // only inactive channels
+];
+
+test("resolveTargets: set name expands to its active channelIds", () => {
+	const r = resolveTargets(["launch blast"], channels, sets);
+	assert.deepEqual(r.channelIds, ["1", "3"]); // 4 is inactive
+	assert.deepEqual(r.unmatched, []);
+});
+
+test("resolveTargets: set name wins over platform name", () => {
+	const r = resolveTargets(["x"], channels, sets);
+	assert.deepEqual(r.channelIds, ["3"]);
+});
+
+test("resolveTargets: falls back to platform/account matching", () => {
+	const r = resolveTargets(["@brand", "linkedin"], channels, sets);
+	assert.deepEqual(r.channelIds, ["2", "3"]);
+});
+
+test("resolveTargets: set with only inactive channels is unmatched", () => {
+	const r = resolveTargets(["Dead Set"], channels, sets);
+	assert.deepEqual(r.channelIds, []);
+	assert.deepEqual(r.unmatched, ["Dead Set"]);
+});
+
+test("resolveTargets: dedupes across set and direct matches", () => {
+	const r = resolveTargets(["Launch Blast", "linkedin", "tiktok"], channels, sets);
+	assert.deepEqual(r.channelIds, ["1", "3"]);
+	assert.deepEqual(r.unmatched, ["tiktok"]);
+});
+
+// ---------------------------------------------------------------------------
+// computeParts (multipart upload — fixed 10 MB parts)
+// ---------------------------------------------------------------------------
+
+const MB10 = 10 * 1024 * 1024;
+
+test("computeParts: exact multiple", () => {
+	const parts = computeParts(3 * MB10, MB10);
+	assert.equal(parts.length, 3);
+	assert.deepEqual(parts[0], { partNumber: 1, start: 0, end: MB10 });
+	assert.deepEqual(parts[2], { partNumber: 3, start: 2 * MB10, end: 3 * MB10 });
+});
+
+test("computeParts: last part smaller", () => {
+	const parts = computeParts(2 * MB10 + 5, MB10);
+	assert.equal(parts.length, 3);
+	assert.deepEqual(parts[2], { partNumber: 3, start: 2 * MB10, end: 2 * MB10 + 5 });
+});
+
+test("computeParts: file smaller than one part", () => {
+	const parts = computeParts(123, MB10);
+	assert.deepEqual(parts, [{ partNumber: 1, start: 0, end: 123 }]);
+});
+
+test("computeParts: zero size returns no parts", () => {
+	assert.deepEqual(computeParts(0, MB10), []);
 });

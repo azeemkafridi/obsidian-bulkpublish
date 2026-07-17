@@ -2,9 +2,27 @@
  * Thin BulkPublish API client built on Obsidian's requestUrl (no CORS issues).
  */
 import { requestUrl, RequestUrlParam } from "obsidian";
-import type { Channel, XCosts } from "./lib";
+import type { Channel, ChannelSet, XCosts } from "./lib";
+import { computeParts } from "./lib";
 
 export const DEFAULT_BASE_URL = "https://app.bulkpublish.com";
+
+/**
+ * Files larger than this go through the chunked multipart flow
+ * (create → PUT 10 MB parts → complete). Videos are accepted up to 1 GB,
+ * images up to 100 MB.
+ */
+export const MULTIPART_THRESHOLD = 100 * 1024 * 1024; // 100 MB
+
+export interface MultipartCreateResponse {
+	r2Key: string;
+	uploadId: string;
+	/** Fixed by the server: 10485760 (10 MB). */
+	partSize: number;
+	/** One presigned PUT URL per part, in order. */
+	partUrls: string[];
+	expiresIn: number;
+}
 
 export interface QuotaUsage {
 	plan: string;
@@ -124,6 +142,19 @@ export class BulkPublishClient {
 		return data.channels ?? [];
 	}
 
+	/**
+	 * List saved channel sets (GET /api/channel-sets). An org can have at most
+	 * 50 sets and set names are unique per org, so a set name is a reliable
+	 * targeting alias.
+	 */
+	async listChannelSets(): Promise<ChannelSet[]> {
+		const data = await this.request<ChannelSet[]>({
+			method: "GET",
+			path: "/api/channel-sets",
+		});
+		return Array.isArray(data) ? data : [];
+	}
+
 	async getQuotaUsage(): Promise<QuotaUsage> {
 		return this.request<QuotaUsage>({ method: "GET", path: "/api/quotas/usage" });
 	}
@@ -144,8 +175,29 @@ export class BulkPublishClient {
 		return this.request({ method: "GET", path: `/api/posts/${id}` });
 	}
 
-	/** Upload media as multipart/form-data (field name "file"). Returns the media ID. */
-	async uploadMedia(fileName: string, data: ArrayBuffer, extension: string): Promise<string> {
+	/**
+	 * Upload a media file and return its media ID. Files up to
+	 * MULTIPART_THRESHOLD go as a single multipart/form-data POST; larger files
+	 * (vault videos up to 1 GB) use the chunked multipart flow.
+	 */
+	async uploadMedia(
+		fileName: string,
+		data: ArrayBuffer,
+		extension: string,
+		onProgress?: (done: number, total: number) => void
+	): Promise<string> {
+		if (data.byteLength > MULTIPART_THRESHOLD) {
+			return this.uploadMediaMultipart(fileName, data, extension, onProgress);
+		}
+		return this.uploadMediaSimple(fileName, data, extension);
+	}
+
+	/** Single-request upload as multipart/form-data (field name "file"). */
+	private async uploadMediaSimple(
+		fileName: string,
+		data: ArrayBuffer,
+		extension: string
+	): Promise<string> {
 		const boundary = `----BulkPublishObsidian${Date.now().toString(36)}${Math.random()
 			.toString(36)
 			.slice(2)}`;
@@ -170,5 +222,96 @@ export class BulkPublishClient {
 			contentType: `multipart/form-data; boundary=${boundary}`,
 		});
 		return res.file.id;
+	}
+
+	/**
+	 * Chunked upload for large files: create → PUT each fixed 10 MB part to its
+	 * presigned URL, collecting exactly one ETag per part → complete. On any
+	 * failure the upload is aborted, which frees the parts already stored.
+	 * Individual part PUTs are retried once, so a network blip never restarts
+	 * the whole file.
+	 */
+	private async uploadMediaMultipart(
+		fileName: string,
+		data: ArrayBuffer,
+		extension: string,
+		onProgress?: (done: number, total: number) => void
+	): Promise<string> {
+		const mime = mimeForExtension(extension);
+		const created = await this.request<MultipartCreateResponse>({
+			method: "POST",
+			path: "/api/media/multipart/create",
+			json: { contentType: mime, sizeBytes: data.byteLength },
+		});
+
+		try {
+			const parts = computeParts(data.byteLength, created.partSize);
+			const etags: { partNumber: number; etag: string }[] = [];
+			for (const part of parts) {
+				const url = created.partUrls[part.partNumber - 1];
+				if (!url) {
+					throw new BulkPublishError(
+						`Missing presigned URL for part ${part.partNumber}.`
+					);
+				}
+				const slice = data.slice(part.start, part.end);
+				const etag = await this.putPart(url, slice);
+				etags.push({ partNumber: part.partNumber, etag });
+				onProgress?.(part.partNumber, parts.length);
+			}
+
+			const res = await this.request<{ file: { id: string } }>({
+				method: "POST",
+				path: "/api/media/multipart/complete",
+				json: {
+					r2Key: created.r2Key,
+					uploadId: created.uploadId,
+					parts: etags,
+					fileName,
+					mimeType: mime,
+					sizeBytes: data.byteLength,
+				},
+			});
+			return res.file.id;
+		} catch (err) {
+			// Best-effort abort so stored parts are freed; original error wins.
+			try {
+				await this.request({
+					method: "POST",
+					path: "/api/media/multipart/abort",
+					json: { r2Key: created.r2Key, uploadId: created.uploadId },
+				});
+			} catch {
+				// ignore — server sweeps stale multipart uploads
+			}
+			throw err;
+		}
+	}
+
+	/** PUT one part to its presigned URL (no auth header) and return its ETag. One retry. */
+	private async putPart(url: string, body: ArrayBuffer, attempt = 0): Promise<string> {
+		try {
+			const res = await requestUrl({
+				url,
+				method: "PUT",
+				body,
+				throw: false,
+			});
+			if (res.status >= 400) {
+				throw new BulkPublishError(
+					`Part upload failed (HTTP ${res.status}).`,
+					undefined,
+					res.status
+				);
+			}
+			const etag = res.headers["etag"] ?? res.headers["ETag"] ?? res.headers["Etag"];
+			if (!etag) {
+				throw new BulkPublishError("Storage did not return an ETag for a part.");
+			}
+			return etag.replace(/"/g, "");
+		} catch (err) {
+			if (attempt < 1) return this.putPart(url, body, attempt + 1);
+			throw err;
+		}
 	}
 }

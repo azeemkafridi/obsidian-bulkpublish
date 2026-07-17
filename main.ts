@@ -12,6 +12,7 @@ import {
 import {
 	buildCaption,
 	Channel,
+	ChannelSet,
 	containsUrl,
 	estimateXCost,
 	extractEmbeds,
@@ -20,7 +21,7 @@ import {
 	parseBulkPublishFrontmatter,
 	parseScheduleInput,
 	platformLabel,
-	resolveChannels,
+	resolveTargets,
 	splitFrontmatter,
 	validateCharLimits,
 } from "./src/lib";
@@ -180,8 +181,10 @@ class BulkPublishSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Default channels")
 			.setDesc(
-				'Comma-separated platform names preselected in the publish modal, e.g. "x, linkedin". ' +
-					"A note can override this with a bulkpublish-channels frontmatter list."
+				'Comma-separated names preselected in the publish modal, e.g. "x, linkedin". ' +
+					"Names match a saved channel set first (sets are unique per organization, max 50), " +
+					"then a platform or account name. A note can override this with a " +
+					"bulkpublish-channels frontmatter list."
 			)
 			.addText((text) =>
 				text
@@ -242,6 +245,8 @@ class PublishModal extends Modal {
 	private selectedChannelIds = new Set<string>();
 	private includedEmbeds = new Set<string>(); // by link
 	private channels: Channel[] = [];
+	private channelSets: ChannelSet[] = [];
+	private channelCheckboxes = new Map<string, HTMLInputElement>();
 	private quota: QuotaUsage | null = null;
 	private xUsage: XUsage | null = null;
 	private publishing = false;
@@ -378,8 +383,9 @@ class PublishModal extends Modal {
 	}
 
 	private async loadChannels(container: HTMLElement) {
+		const client = this.plugin.client();
 		try {
-			this.channels = await this.plugin.client().getChannels();
+			this.channels = await client.getChannels();
 		} catch (err) {
 			container.empty();
 			container.createSpan({
@@ -387,6 +393,12 @@ class PublishModal extends Modal {
 				cls: "bp-error-text",
 			});
 			return;
+		}
+		// Channel sets are optional sugar — never block the modal on them.
+		try {
+			this.channelSets = await client.listChannelSets();
+		} catch {
+			this.channelSets = [];
 		}
 
 		container.empty();
@@ -399,6 +411,7 @@ class PublishModal extends Modal {
 		}
 
 		// Preselect: frontmatter channels win, else settings default channels.
+		// Names match a channel set first, then a platform or account name.
 		const wanted =
 			this.input.frontmatterChannels.length > 0
 				? this.input.frontmatterChannels
@@ -406,15 +419,33 @@ class PublishModal extends Modal {
 						.split(",")
 						.map((s) => s.trim())
 						.filter(Boolean);
-		const { channelIds, unmatched } = resolveChannels(wanted, this.channels);
+		const { channelIds, unmatched } = resolveTargets(
+			wanted,
+			this.channels,
+			this.channelSets
+		);
 		for (const id of channelIds) this.selectedChannelIds.add(id);
 		if (unmatched.length > 0 && this.input.frontmatterChannels.length > 0) {
 			container.createDiv({
 				cls: "bp-error-text",
-				text: `No active channel matches frontmatter: ${unmatched.join(", ")}`,
+				text: `No active channel or channel set matches frontmatter: ${unmatched.join(", ")}`,
 			});
 		}
 
+		// Quick-select buttons: one per saved channel set.
+		if (this.channelSets.length > 0) {
+			const setsRow = container.createDiv({ cls: "bp-channel-sets" });
+			for (const set of this.channelSets) {
+				const btn = setsRow.createEl("button", {
+					text: set.name,
+					cls: "bp-set-btn",
+					attr: { type: "button", title: "Select this channel set's channels" },
+				});
+				btn.addEventListener("click", () => this.applyChannelSet(set));
+			}
+		}
+
+		this.channelCheckboxes.clear();
 		for (const channel of active) {
 			const row = container.createDiv({ cls: "bp-channel-row" });
 			const cb = row.createEl("input", { type: "checkbox" });
@@ -425,11 +456,25 @@ class PublishModal extends Modal {
 				this.refreshValidation();
 				this.refreshPreview();
 			});
+			this.channelCheckboxes.set(channel.id, cb);
 			row.createSpan({
 				text: `${platformLabel(channel.platform)} — ${channel.accountName}`,
 			});
 		}
 
+		this.refreshValidation();
+		this.refreshPreview();
+	}
+
+	/** Select exactly the channels of a saved set (active channels only). */
+	private applyChannelSet(set: ChannelSet) {
+		this.selectedChannelIds.clear();
+		const wanted = new Set(set.channelIds.map(String));
+		for (const [id, cb] of this.channelCheckboxes) {
+			const on = wanted.has(id);
+			cb.checked = on;
+			if (on) this.selectedChannelIds.add(id);
+		}
 		this.refreshValidation();
 		this.refreshPreview();
 	}
@@ -563,7 +608,11 @@ class PublishModal extends Modal {
 				if (!tfile) continue;
 				this.publishBtn.setText(`Uploading ${embed.name}…`);
 				const data = await this.app.vault.readBinary(tfile);
-				mediaIds.push(await client.uploadMedia(embed.name, data, embed.extension));
+				mediaIds.push(
+					await client.uploadMedia(embed.name, data, embed.extension, (done, total) => {
+						this.publishBtn.setText(`Uploading ${embed.name}… (part ${done}/${total})`);
+					})
+				);
 			}
 
 			// 2) Create the post

@@ -5,6 +5,8 @@ Publish the current note — or just a selection — to 14 social media platform
 - **Two commands**: *Publish note to social…* and *Publish selection to social…*
 - **Caption prefilled** from the note (frontmatter removed, markdown optionally stripped to plain text)
 - **Channel checkboxes** for every connected account (X, LinkedIn, Facebook, Instagram, Threads, Bluesky, Mastodon, Pinterest, TikTok, YouTube, Google Business Profile, Reddit, Discord, Telegram)
+- **Channel sets** — your saved channel groups appear as one-click buttons in the modal, and set names work anywhere channel names do (frontmatter, default channels)
+- **Large videos** — files over 100 MB upload in resumable 10 MB chunks (videos up to 1 GB, images up to 100 MB)
 - **Scheduling** via a date/time picker or frontmatter
 - **Embedded images/videos** (`![[photo.png]]`) detected and uploaded with the post — pick which ones to include
 - **"Before you publish" panel**: posts today/this month vs your plan limits, plus an X cost estimate and credit balance
@@ -40,7 +42,7 @@ If you use the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin:
 | Setting | Description |
 |---|---|
 | **API key** | Your BulkPublish API key (`bp_…`). |
-| **Default channels** | Comma-separated platform names preselected in the publish modal, e.g. `x, linkedin`. Frontmatter overrides this. |
+| **Default channels** | Comma-separated names preselected in the publish modal, e.g. `x, linkedin`. Names match a saved channel set first, then a platform or account name. Frontmatter overrides this. |
 | **Strip markdown** | Convert markdown to plain text for the caption (headings, bold, links, list markers, wiki links…). Recommended. |
 | **Append note link** | Appends the note's `share-url` frontmatter value (if present) to the caption. **A URL makes X posts cost ~13× more credits** — see below. |
 
@@ -60,7 +62,7 @@ share-url: https://myblog.com/post    # used by the "Append note link" setting
 ---
 ```
 
-- `bulkpublish-channels` accepts an inline array, a dash list, or a single value. Names match a channel's platform (`x`, `linkedin`, `mastodon`, …) or its account name, case-insensitively.
+- `bulkpublish-channels` accepts an inline array, a dash list, or a single value. Names match a saved **channel set** name first, then a channel's platform (`x`, `linkedin`, `mastodon`, …) or its account name, case-insensitively. A set name expands to all of its (active) channels.
 - `bulkpublish-schedule` accepts `YYYY-MM-DD` (defaults to 09:00 local) or `YYYY-MM-DDTHH:mm`.
 
 After publishing, the plugin writes results back:
@@ -75,6 +77,18 @@ bulkpublish-status: published
 - The **Before you publish** panel shows your plan's posts-per-day / posts-per-month limits against current usage, so you know a publish will be accepted.
 - **X (Twitter) posts consume prepaid credits.** A plain tweet costs ~15 dcents ($0.015); **a tweet containing any URL costs ~200 dcents ($0.20) — about 13× more** — and each attached media file adds ~5 dcents. The modal estimates the cost of your exact caption + media and warns if your balance is too low. Mind this before enabling **Append note link**.
 - Live prices and your balance come from the API at modal-open time; the numbers above are the current defaults.
+
+## Channel sets
+
+Channel sets are saved channel groups managed in the BulkPublish app (an organization can have up to **50 sets**, and **set names are unique per organization** — which is why a set name is a reliable targeting alias). The publish modal shows each set as a quick-select button, and set names can be used in `bulkpublish-channels` frontmatter or the **Default channels** setting.
+
+## Large media uploads
+
+Embedded media up to 100 MB uploads in a single request. Larger files — vault videos up to **1 GB** — automatically use BulkPublish's chunked multipart flow: the plugin requests an upload, PUTs the file in fixed **10 MB parts** (collecting exactly one ETag per part), then completes the upload. A failed part is retried on its own, so a network blip never restarts the whole file; if the upload fails, the plugin aborts it, which frees the parts already stored.
+
+## RSS autopost
+
+BulkPublish also supports RSS/Atom autoposting (feeds polled every 15 minutes; new items become draft or auto-published posts). That is an account-level automation with no note-publishing surface, so this plugin does not expose it — manage feeds at [app.bulkpublish.com](https://app.bulkpublish.com) or via the API (`/api/rss-feeds`).
 
 ## Character limits
 
