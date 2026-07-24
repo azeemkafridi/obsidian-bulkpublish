@@ -22,6 +22,7 @@ export const CHAR_LIMITS: Record<string, number> = {
 	reddit: 40000,
 	discord: 2000,
 	telegram: 4096,
+	tumblr: 32768,
 };
 
 export const PLATFORM_LABELS: Record<string, string> = {
@@ -39,6 +40,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
 	reddit: "Reddit",
 	discord: "Discord",
 	telegram: "Telegram",
+	tumblr: "Tumblr",
 };
 
 export function platformLabel(platform: string): string {

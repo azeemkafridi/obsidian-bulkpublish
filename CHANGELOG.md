@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0 (2026-07-25)
+
+- **Tumblr support (15th platform).** `tumblr` added to the platform character-limit map (32,768) and display names. Tumblr posts accept up to 30 images **or** exactly one video — never both in the same post.
+- **Platform availability.** Platforms can now be disabled server-side. Post creation targeting a disabled platform returns 403 `PLATFORM_DISABLED` (distinct from `FEATURE_DISABLED`, which means the plan doesn't include it). Posts already scheduled when a platform is disabled are **held, not failed**, and publish automatically once it is re-enabled — no need to delete and recreate them. `GET /api/platforms` reports the current state of every platform.
+
 ## 1.2.0 (2026-07-24)
 
 - **Team approval**: new *Request approval before publishing* checkbox in the publish modal (with a **Request approval** setting and `bulkpublish-request-approval` frontmatter override) sends `requestApproval: true` on `POST /api/posts`, holding a scheduled post with approval status `pending`. Approval is orthogonal to status — `pending`/`rejected` posts are skipped by the scheduler even when overdue.
