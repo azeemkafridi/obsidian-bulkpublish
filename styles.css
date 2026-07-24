@@ -67,6 +67,7 @@
 }
 
 .bp-channel-row,
+.bp-approval-row,
 .bp-media-row {
 	display: flex;
 	align-items: center;
@@ -74,6 +75,7 @@
 }
 
 .bp-channel-row input[type="checkbox"]:checked,
+.bp-approval-row input[type="checkbox"]:checked,
 .bp-media-row input[type="checkbox"]:checked {
 	accent-color: var(--bp-accent);
 }
@@ -157,4 +159,14 @@
 .bp-publish-btn:disabled {
 	opacity: 0.6;
 	cursor: default;
+}
+
+/* Approval queue */
+.bp-approval-item {
+	border-top: 1px solid var(--background-modifier-border);
+	padding: 10px 0;
+}
+
+.bp-approval-excerpt {
+	white-space: pre-wrap;
 }

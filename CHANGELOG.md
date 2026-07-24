@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 (2026-07-24)
+
+- **Team approval**: new *Request approval before publishing* checkbox in the publish modal (with a **Request approval** setting and `bulkpublish-request-approval` frontmatter override) sends `requestApproval: true` on `POST /api/posts`, holding a scheduled post with approval status `pending`. Approval is orthogonal to status — `pending`/`rejected` posts are skipped by the scheduler even when overdue.
+- New command **Review posts awaiting approval…**: lists `GET /api/posts?approvalStatus=pending` with **Approve** (`POST /api/posts/{id}/approve`) and **Reject…** (`POST /api/posts/{id}/reject`, optional reason up to 2000 chars). Both need a role with post:approve (owner, admin, approver).
+- Publish failures with the 403 `APPROVAL_REQUIRED` code now say "Your role can't publish directly — submit for approval instead".
+- The resulting approval state is written back to the note as `bulkpublish-approval` (the server forces `pending` for contributors regardless of the checkbox).
+
 ## 1.1.0 (2026-07-17)
 
 - **Channel sets**: saved channel groups (GET /api/channel-sets) appear as quick-select buttons in the publish modal, and set names resolve in `bulkpublish-channels` frontmatter and the Default channels setting (checked before platform/account names). Sets are unique-named per organization, max 50.

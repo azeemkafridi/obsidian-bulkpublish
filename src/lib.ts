@@ -89,6 +89,8 @@ export interface BulkPublishFrontmatter {
 	shareUrl: string | null; // public URL to append when "append note link" is on
 	postId: string | null; // written back after publishing
 	status: string | null;
+	/** true/false override for the "Request approval" setting (null = use setting). */
+	requestApproval: boolean | null;
 }
 
 function unquote(value: string): string {
@@ -115,6 +117,7 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 		shareUrl: null,
 		postId: null,
 		status: null,
+		requestApproval: null,
 	};
 	if (!fmText) return result;
 
@@ -166,6 +169,12 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 			case "bulkpublish-status":
 				result.status = value ? unquote(value) : null;
 				break;
+			case "bulkpublish-request-approval": {
+				const v = unquote(value).toLowerCase();
+				if (v === "true" || v === "yes") result.requestApproval = true;
+				else if (v === "false" || v === "no") result.requestApproval = false;
+				break;
+			}
 		}
 	}
 	return result;
@@ -470,4 +479,34 @@ export function buildCaption(body: string, options: BuildCaptionOptions): string
 		caption = caption ? `${caption}\n\n${options.shareUrl}` : options.shareUrl;
 	}
 	return caption;
+}
+
+// ---------------------------------------------------------------------------
+// Team approval
+// ---------------------------------------------------------------------------
+
+/** Human labels for a post's team approval state. */
+export const APPROVAL_LABELS: Record<string, string> = {
+	none: "No approval needed",
+	pending: "Awaiting approval",
+	approved: "Approved",
+	rejected: "Rejected",
+};
+
+export function approvalLabel(status: string | null | undefined): string {
+	if (!status) return APPROVAL_LABELS.none;
+	return APPROVAL_LABELS[status] ?? status;
+}
+
+/**
+ * Message for the API's 403 APPROVAL_REQUIRED error, returned by
+ * POST /api/posts/{id}/publish and /retry for roles without post:publish.
+ */
+export const APPROVAL_REQUIRED_MESSAGE =
+	"Your role can't publish directly — submit for approval instead " +
+	"(enable “Request approval” and schedule the post).";
+
+/** Map an API error to a user-facing message, special-casing APPROVAL_REQUIRED. */
+export function approvalAwareMessage(code: string | undefined, fallback: string): string {
+	return code === "APPROVAL_REQUIRED" ? APPROVAL_REQUIRED_MESSAGE : fallback;
 }

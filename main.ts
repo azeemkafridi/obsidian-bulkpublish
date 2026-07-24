@@ -10,6 +10,8 @@ import {
 	TFile,
 } from "obsidian";
 import {
+	approvalAwareMessage,
+	approvalLabel,
 	buildCaption,
 	Channel,
 	ChannelSet,
@@ -44,6 +46,8 @@ interface BulkPublishSettings {
 	defaultChannels: string; // comma-separated platform names, e.g. "x, linkedin"
 	stripMarkdown: boolean;
 	appendShareUrl: boolean;
+	/** Preselect "Request approval" in the publish modal for scheduled posts. */
+	requestApproval: boolean;
 }
 
 const DEFAULT_SETTINGS: BulkPublishSettings = {
@@ -52,6 +56,7 @@ const DEFAULT_SETTINGS: BulkPublishSettings = {
 	defaultChannels: "",
 	stripMarkdown: true,
 	appendShareUrl: false,
+	requestApproval: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -92,6 +97,20 @@ export default class BulkPublishPlugin extends Plugin {
 				const file = view instanceof MarkdownView ? view.file : null;
 				if (!checking) this.openPublishModal(file, selection);
 				return true;
+			},
+		});
+
+		this.addCommand({
+			id: "review-approvals",
+			name: "Review posts awaiting approval…",
+			callback: () => {
+				if (!this.settings.apiKey.trim()) {
+					new Notice(
+						"BulkPublish: no API key set. Add one in Settings → BulkPublish."
+					);
+					return;
+				}
+				new ApprovalQueueModal(this.app, this).open();
 			},
 		});
 	}
@@ -136,6 +155,7 @@ export default class BulkPublishPlugin extends Plugin {
 			embeds,
 			frontmatterChannels: fm.channels,
 			frontmatterSchedule: fm.schedule,
+			frontmatterRequestApproval: fm.requestApproval,
 		}).open();
 	}
 
@@ -224,6 +244,24 @@ class BulkPublishSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					})
 			);
+
+		new Setting(containerEl)
+			.setName("Request approval")
+			.setDesc(
+				"Preselect “Request approval” in the publish modal: a scheduled post is held for a " +
+					"teammate to review (approval status becomes “pending”) instead of going out at its " +
+					"scheduled time. If your role can't publish (contributor), the server holds scheduled " +
+					"posts for approval whether or not this is on. A note can override this with " +
+					"bulkpublish-request-approval frontmatter."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.requestApproval)
+					.onChange(async (value) => {
+						this.plugin.settings.requestApproval = value;
+						await this.plugin.saveSettings();
+					})
+			);
 	}
 }
 
@@ -237,11 +275,14 @@ interface PublishModalInput {
 	embeds: EmbeddedMedia[];
 	frontmatterChannels: string[];
 	frontmatterSchedule: string | null;
+	frontmatterRequestApproval: boolean | null;
 }
 
 class PublishModal extends Modal {
 	private caption: string;
 	private scheduleInput: string;
+	private requestApproval: boolean;
+	private approvalHintEl: HTMLElement | null = null;
 	private selectedChannelIds = new Set<string>();
 	private includedEmbeds = new Set<string>(); // by link
 	private channels: Channel[] = [];
@@ -264,6 +305,8 @@ class PublishModal extends Modal {
 		super(app);
 		this.caption = input.caption;
 		this.scheduleInput = input.frontmatterSchedule ?? "";
+		this.requestApproval =
+			input.frontmatterRequestApproval ?? plugin.settings.requestApproval;
 		for (const e of input.embeds) this.includedEmbeds.add(e.link);
 	}
 
@@ -316,6 +359,18 @@ class PublishModal extends Modal {
 		scheduleSection.createDiv({
 			cls: "bp-hint",
 			text: "Leave empty to publish immediately.",
+		});
+
+		// --- Team approval ---
+		const approvalSection = contentEl.createDiv({ cls: "bp-section" });
+		const approvalRow = approvalSection.createDiv({ cls: "bp-approval-row" });
+		const approvalCb = approvalRow.createEl("input", { type: "checkbox" });
+		approvalCb.checked = this.requestApproval;
+		approvalRow.createSpan({ text: "Request approval before publishing" });
+		this.approvalHintEl = approvalSection.createDiv({ cls: "bp-hint" });
+		approvalCb.addEventListener("change", () => {
+			this.requestApproval = approvalCb.checked;
+			this.refreshApprovalHint();
 		});
 
 		// --- Embedded media ---
@@ -512,8 +567,38 @@ class PublishModal extends Modal {
 	}
 
 	private refreshPublishLabel() {
+		this.refreshApprovalHint();
+	}
+
+	private refreshApprovalHint() {
+		const el = this.approvalHintEl;
+		if (!el) return;
+		el.removeClass("bp-error-text");
+		if (!this.requestApproval) {
+			el.setText(
+				"Off: the post goes out at its scheduled time. Contributors' scheduled posts are always held for approval."
+			);
+		} else if (!this.scheduleInput.trim()) {
+			el.setText(
+				"Approval applies to scheduled posts only — pick a date/time above, or the post publishes immediately."
+			);
+			el.addClass("bp-error-text");
+		} else {
+			el.setText(
+				"The post is held with approval status “pending” and is skipped by the scheduler until a teammate " +
+					"(owner, admin or approver) approves it — an overdue post publishes immediately on approval."
+			);
+		}
+		this.refreshPublishLabel2();
+	}
+
+	/** Publish button label: depends on both schedule and approval. */
+	private refreshPublishLabel2() {
 		if (!this.publishBtn) return;
-		this.publishBtn.setText(this.scheduleInput.trim() ? "Schedule" : "Publish");
+		const scheduled = !!this.scheduleInput.trim();
+		this.publishBtn.setText(
+			scheduled ? (this.requestApproval ? "Submit for approval" : "Schedule") : "Publish"
+		);
 	}
 
 	private refreshPreview() {
@@ -617,6 +702,9 @@ class PublishModal extends Modal {
 
 			// 2) Create the post
 			this.publishBtn.setText(scheduledAt ? "Scheduling…" : "Publishing…");
+			// requestApproval only means anything for a scheduled post, and is
+			// sent only when true (the API default is false).
+			const wantsApproval = !!scheduledAt && this.requestApproval;
 			const created = await client.createPost({
 				content: this.caption,
 				channels: channelIds.map((channelId) => ({ channelId })),
@@ -626,6 +714,7 @@ class PublishModal extends Modal {
 				timezone: scheduledAt
 					? Intl.DateTimeFormat().resolvedOptions().timeZone
 					: undefined,
+				...(wantsApproval ? { requestApproval: true } : {}),
 			});
 
 			// 3) Publish now (if not scheduled) and poll for outcomes
@@ -642,13 +731,26 @@ class PublishModal extends Modal {
 				});
 			}
 
+			// The server can force approval even when we didn't ask (roles
+			// without post:publish always get 'pending'), so trust the response.
+			const approval = created.approvalStatus ?? (wantsApproval ? "pending" : "none");
+			if (approval === "pending") {
+				this.resultsEl.createDiv({
+					text:
+						"Held for team approval — it will not publish until an owner, admin or approver " +
+						"approves it in BulkPublish (or via “Review posts awaiting approval…”).",
+				});
+			}
+
 			// 4) Write results back into frontmatter
-			await this.writeFrontmatter(created.id, finalStatus);
+			await this.writeFrontmatter(created.id, finalStatus, approval);
 
 			new Notice(
-				scheduledAt
-					? "BulkPublish: post scheduled."
-					: "BulkPublish: post submitted."
+				approval === "pending"
+					? "BulkPublish: submitted for approval."
+					: scheduledAt
+						? "BulkPublish: post scheduled."
+						: "BulkPublish: post submitted."
 			);
 			this.publishBtn.setText("Done");
 		} catch (err) {
@@ -656,6 +758,14 @@ class PublishModal extends Modal {
 				cls: "bp-error-text",
 				text: `Failed: ${errMessage(err)}`,
 			});
+			if (err instanceof BulkPublishError && err.code === "APPROVAL_REQUIRED") {
+				this.resultsEl.createDiv({
+					cls: "bp-error-text",
+					text:
+						"Tip: tick “Request approval” and pick a schedule — the post will be queued " +
+						"for a teammate to approve.",
+				});
+			}
 			this.publishBtn.disabled = false;
 			this.publishBtn.setText(scheduledAt ? "Schedule" : "Publish");
 			this.publishing = false;
@@ -709,13 +819,16 @@ class PublishModal extends Modal {
 		}
 	}
 
-	private async writeFrontmatter(postId: string, status: string) {
+	private async writeFrontmatter(postId: string, status: string, approval?: string) {
 		const file = this.input.file;
 		if (!file) return;
 		try {
 			await this.app.fileManager.processFrontMatter(file, (fm) => {
 				fm["bulkpublish-post-id"] = postId;
 				fm["bulkpublish-status"] = status;
+				if (approval && approval !== "none") {
+					fm["bulkpublish-approval"] = approval;
+				}
 			});
 		} catch (err) {
 			console.error("BulkPublish: could not write frontmatter", err);
@@ -728,11 +841,154 @@ class PublishModal extends Modal {
 }
 
 // ---------------------------------------------------------------------------
+// Approval queue modal
+// ---------------------------------------------------------------------------
+
+/**
+ * Lists posts with approvalStatus "pending" (GET /api/posts?approvalStatus=pending)
+ * and offers Approve / Reject. Both endpoints need a role with post:approve
+ * (owner, admin, approver) — other roles get a 403.
+ */
+class ApprovalQueueModal extends Modal {
+	private listEl!: HTMLElement;
+
+	constructor(app: App, private plugin: BulkPublishPlugin) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		this.modalEl.addClass("bp-modal");
+		contentEl.createEl("h2", { text: "Posts awaiting approval" });
+		this.listEl = contentEl.createDiv({ cls: "bp-approval-list" });
+		this.listEl.setText("Loading…");
+		void this.load();
+	}
+
+	private async load() {
+		try {
+			const posts = await this.plugin
+				.client()
+				.listPosts({ approvalStatus: "pending" });
+			this.render(posts);
+		} catch (err) {
+			this.listEl.empty();
+			this.listEl.createDiv({
+				cls: "bp-error-text",
+				text: `Could not load the approval queue: ${errMessage(err)}`,
+			});
+		}
+	}
+
+	private render(posts: PostDetail[]) {
+		this.listEl.empty();
+		if (posts.length === 0) {
+			this.listEl.setText("Nothing is waiting for approval.");
+			return;
+		}
+		for (const post of posts) {
+			const row = this.listEl.createDiv({ cls: "bp-approval-item" });
+			const excerpt = (post.content ?? "").replace(/\s+/g, " ").trim();
+			row.createDiv({
+				cls: "bp-approval-excerpt",
+				text: excerpt.length > 140 ? `${excerpt.slice(0, 140)}…` : excerpt || "(no caption)",
+			});
+			const meta = [`post ${post.id}`, approvalLabel(post.approvalStatus)];
+			if (post.scheduledAt) {
+				meta.push(`scheduled ${new Date(post.scheduledAt).toLocaleString()}`);
+			}
+			row.createDiv({ cls: "bp-hint", text: meta.join(" · ") });
+			if (post.rejectionReason) {
+				row.createDiv({
+					cls: "bp-hint",
+					text: `Previous rejection: ${post.rejectionReason}`,
+				});
+			}
+
+			const actions = row.createDiv({ cls: "bp-buttons" });
+			const approveBtn = actions.createEl("button", { text: "Approve" });
+			const rejectBtn = actions.createEl("button", { text: "Reject…" });
+			const status = row.createDiv();
+
+			approveBtn.addEventListener("click", async () => {
+				approveBtn.disabled = rejectBtn.disabled = true;
+				try {
+					await this.plugin.client().approvePost(post.id);
+					status.addClass("bp-result-ok");
+					status.setText(
+						"Approved — publishes at its scheduled time (immediately if it was overdue)."
+					);
+				} catch (err) {
+					approveBtn.disabled = rejectBtn.disabled = false;
+					status.addClass("bp-error-text");
+					status.setText(`Approve failed: ${errMessage(err)}`);
+				}
+			});
+
+			rejectBtn.addEventListener("click", () => {
+				new RejectReasonModal(this.app, async (reason) => {
+					approveBtn.disabled = rejectBtn.disabled = true;
+					try {
+						await this.plugin.client().rejectPost(post.id, reason);
+						status.removeClass("bp-result-ok");
+						status.setText("Rejected — back to draft; the author was notified.");
+					} catch (err) {
+						approveBtn.disabled = rejectBtn.disabled = false;
+						status.addClass("bp-error-text");
+						status.setText(`Reject failed: ${errMessage(err)}`);
+					}
+				}).open();
+			});
+		}
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+/** Prompts for an optional rejection reason (max 2000 chars, shown to the author). */
+class RejectReasonModal extends Modal {
+	constructor(app: App, private onSubmit: (reason: string) => void | Promise<void>) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.createEl("h2", { text: "Reject post" });
+		contentEl.createDiv({
+			cls: "bp-hint",
+			text: "Optional reason — shown to the author in-app and on the post (max 2000 characters).",
+		});
+		const textarea = contentEl.createEl("textarea", { cls: "bp-caption" });
+		textarea.rows = 4;
+		textarea.maxLength = 2000;
+
+		const buttons = contentEl.createDiv({ cls: "bp-buttons" });
+		const cancel = buttons.createEl("button", { text: "Cancel" });
+		cancel.addEventListener("click", () => this.close());
+		const confirm = buttons.createEl("button", { text: "Reject" });
+		confirm.addEventListener("click", () => {
+			this.close();
+			void this.onSubmit(textarea.value);
+		});
+	}
+
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function errMessage(err: unknown): string {
-	if (err instanceof BulkPublishError) return err.message;
+	if (err instanceof BulkPublishError) {
+		return approvalAwareMessage(err.code, err.message);
+	}
 	if (err instanceof Error) return err.message;
 	return String(err);
 }

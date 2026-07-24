@@ -8,6 +8,7 @@ Publish the current note — or just a selection — to 14 social media platform
 - **Channel sets** — your saved channel groups appear as one-click buttons in the modal, and set names work anywhere channel names do (frontmatter, default channels)
 - **Large videos** — files over 100 MB upload in resumable 10 MB chunks (videos up to 1 GB, images up to 100 MB)
 - **Scheduling** via a date/time picker or frontmatter
+- **Team approval** — hold a scheduled post for review, and approve/reject the queue from a command
 - **Embedded images/videos** (`![[photo.png]]`) detected and uploaded with the post — pick which ones to include
 - **"Before you publish" panel**: posts today/this month vs your plan limits, plus an X cost estimate and credit balance
 - **Per-platform results** after publishing (status, error, link to the live post), written back into the note's frontmatter
@@ -45,6 +46,7 @@ If you use the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin:
 | **Default channels** | Comma-separated names preselected in the publish modal, e.g. `x, linkedin`. Names match a saved channel set first, then a platform or account name. Frontmatter overrides this. |
 | **Strip markdown** | Convert markdown to plain text for the caption (headings, bold, links, list markers, wiki links…). Recommended. |
 | **Append note link** | Appends the note's `share-url` frontmatter value (if present) to the caption. **A URL makes X posts cost ~13× more credits** — see below. |
+| **Request approval** | Preselects *Request approval before publishing* in the modal, holding scheduled posts for a teammate to review. |
 
 ### API key security
 
@@ -58,19 +60,31 @@ Drive the publish modal from note frontmatter:
 ---
 bulkpublish-channels: [x, linkedin]   # platform names or account names; preselects channels
 bulkpublish-schedule: 2026-07-01T09:00 # local time; prefills the schedule picker
+bulkpublish-request-approval: true     # hold this scheduled post for team approval
 share-url: https://myblog.com/post    # used by the "Append note link" setting
 ---
 ```
 
 - `bulkpublish-channels` accepts an inline array, a dash list, or a single value. Names match a saved **channel set** name first, then a channel's platform (`x`, `linkedin`, `mastodon`, …) or its account name, case-insensitively. A set name expands to all of its (active) channels.
 - `bulkpublish-schedule` accepts `YYYY-MM-DD` (defaults to 09:00 local) or `YYYY-MM-DDTHH:mm`.
+- `bulkpublish-request-approval` accepts `true`/`false` (or `yes`/`no`) and overrides the **Request approval** setting for that note.
 
 After publishing, the plugin writes results back:
 
 ```yaml
 bulkpublish-post-id: abc123
 bulkpublish-status: published
+bulkpublish-approval: pending   # only written when approval applies
 ```
+
+## Team approval
+
+Approval is **orthogonal to the post status**: a post with approval status `pending` or `rejected` is skipped by the scheduler even when it is scheduled and overdue.
+
+- Tick **Request approval before publishing** in the modal (or set the **Request approval** setting / `bulkpublish-request-approval` frontmatter) to hold a *scheduled* post for review — its approval status becomes `pending`. It only applies to scheduled posts; an immediate publish is never held.
+- If your role lacks publish rights (contributors), the server holds your scheduled posts for approval **whether or not you tick the box**, and publishing directly fails with `APPROVAL_REQUIRED` — the plugin then tells you to submit for approval instead.
+- The command **Review posts awaiting approval…** lists everything with approval status `pending` and offers **Approve** and **Reject…** (with an optional reason, max 2000 characters, shown to the author). Approving publishes at the scheduled time — immediately if that time has already passed. Rejecting returns the post to draft with the reason, and notifies the author.
+- Approve/reject require a role with `post:approve` (owner, admin, approver); other roles get a 403.
 
 ## Costs and quotas
 

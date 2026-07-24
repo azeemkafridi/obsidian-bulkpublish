@@ -42,9 +42,24 @@ export interface PostPlatformResult {
 	platformUrl?: string | null;
 }
 
+/**
+ * Team approval state, orthogonal to `status`. 'pending' and 'rejected' posts
+ * are skipped by the scheduler even when scheduled and overdue; approving
+ * releases them (an overdue post publishes immediately on approval).
+ */
+export type ApprovalStatus = "none" | "pending" | "approved" | "rejected";
+
 export interface PostDetail {
 	id: string;
 	status: string;
+	content?: string;
+	scheduledAt?: string | null;
+	approvalStatus?: ApprovalStatus;
+	/** User ID of the approver (set when approvalStatus is 'approved'). */
+	approvedBy?: string | null;
+	approvedAt?: string | null;
+	/** Reviewer's reason when approvalStatus is 'rejected'. */
+	rejectionReason?: string | null;
 	postPlatforms?: PostPlatformResult[];
 }
 
@@ -55,6 +70,12 @@ export interface CreatePostBody {
 	status: "draft" | "scheduled";
 	scheduledAt?: string;
 	timezone?: string;
+	/**
+	 * Optional. Set true to hold a scheduled post for team approval
+	 * (approvalStatus becomes 'pending'). Forced on server-side for roles
+	 * without post:publish (contributors), regardless of this flag.
+	 */
+	requestApproval?: boolean;
 }
 
 export class BulkPublishError extends Error {
@@ -163,7 +184,7 @@ export class BulkPublishClient {
 		return this.request<XUsage>({ method: "GET", path: "/api/quotas/x-usage" });
 	}
 
-	async createPost(body: CreatePostBody): Promise<{ id: string; status?: string }> {
+	async createPost(body: CreatePostBody): Promise<PostDetail> {
 		return this.request({ method: "POST", path: "/api/posts", json: body });
 	}
 
@@ -173,6 +194,47 @@ export class BulkPublishClient {
 
 	async getPost(id: string): Promise<PostDetail> {
 		return this.request({ method: "GET", path: `/api/posts/${id}` });
+	}
+
+	/**
+	 * List posts, optionally filtered by team approval state
+	 * (e.g. 'pending' for the approval queue).
+	 */
+	async listPosts(opts: {
+		approvalStatus?: ApprovalStatus;
+		limit?: number;
+	} = {}): Promise<PostDetail[]> {
+		const query = new URLSearchParams();
+		if (opts.approvalStatus) query.set("approvalStatus", opts.approvalStatus);
+		query.set("limit", String(opts.limit ?? 50));
+		const data = await this.request<{ posts?: PostDetail[] } | PostDetail[]>({
+			method: "GET",
+			path: `/api/posts?${query.toString()}`,
+		});
+		if (Array.isArray(data)) return data;
+		return data?.posts ?? [];
+	}
+
+	/**
+	 * Approve a pending post. Requires a role with post:approve (owner, admin,
+	 * approver) — otherwise the API returns 403. The post publishes at its
+	 * scheduled time, or immediately if that time has already passed.
+	 */
+	async approvePost(id: string): Promise<PostDetail> {
+		return this.request({ method: "POST", path: `/api/posts/${id}/approve`, json: {} });
+	}
+
+	/**
+	 * Reject a pending post: it returns to draft with approvalStatus 'rejected'
+	 * and the optional reason, and the author is notified.
+	 */
+	async rejectPost(id: string, reason?: string): Promise<PostDetail> {
+		const trimmed = (reason ?? "").trim();
+		return this.request({
+			method: "POST",
+			path: `/api/posts/${id}/reject`,
+			json: trimmed ? { reason: trimmed.slice(0, 2000) } : {},
+		});
 	}
 
 	/**
