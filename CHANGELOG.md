@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.0 (2026-08-01)
+
+- **Link tracking**: new **Link tracking** dropdown in the publish modal (and a `bulkpublish-link-tracking` frontmatter override) sets `linkTrackingOverride` — *On* shortens the note's links through bulkpubli.sh and counts the clicks, *Off* publishes them as written, and *Use organization setting* (the default) inherits. A dropdown rather than a checkbox because the field is tri-state: an untouched checkbox could not be told apart from a deliberate *Off*. There is deliberately no plugin-level setting, since the organization setting already is the global default.
+
 ## 1.3.0 (2026-07-25)
 
 - **Tumblr support (15th platform).** `tumblr` added to the platform character-limit map (32,768) and display names. Tumblr posts accept up to 30 images **or** exactly one video — never both in the same post.

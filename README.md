@@ -61,6 +61,7 @@ Drive the publish modal from note frontmatter:
 bulkpublish-channels: [x, linkedin]   # platform names or account names; preselects channels
 bulkpublish-schedule: 2026-07-01T09:00 # local time; prefills the schedule picker
 bulkpublish-request-approval: true     # hold this scheduled post for team approval
+bulkpublish-link-tracking: on          # on | off — omit to use your organization setting
 share-url: https://myblog.com/post    # used by the "Append note link" setting
 ---
 ```
@@ -68,6 +69,7 @@ share-url: https://myblog.com/post    # used by the "Append note link" setting
 - `bulkpublish-channels` accepts an inline array, a dash list, or a single value. Names match a saved **channel set** name first, then a channel's platform (`x`, `linkedin`, `mastodon`, …) or its account name, case-insensitively. A set name expands to all of its (active) channels.
 - `bulkpublish-schedule` accepts `YYYY-MM-DD` (defaults to 09:00 local) or `YYYY-MM-DDTHH:mm`.
 - `bulkpublish-request-approval` accepts `true`/`false` (or `yes`/`no`) and overrides the **Request approval** setting for that note.
+- `bulkpublish-link-tracking` accepts `on`/`off` (or `true`/`false`, `yes`/`no`) and overrides [link tracking](#link-tracking) for that note. **Omit it to inherit your organization's setting** — omitting is not the same as `off`.
 
 After publishing, the plugin writes results back:
 
@@ -76,6 +78,21 @@ bulkpublish-post-id: abc123
 bulkpublish-status: published
 bulkpublish-approval: pending   # only written when approval applies
 ```
+
+## Link tracking
+
+BulkPublish can rewrite the links in a post to `bulkpubli.sh` short URLs and count the clicks — something no platform API reports. It is **off by default** and opt-in per organization in *Settings → Link Tracking*.
+
+The publish modal has a **Link tracking** dropdown:
+
+- *On* — shorten the note's links and count clicks.
+- *Off* — publish the links exactly as written.
+- *Use organization setting* (default) — inherit.
+
+It is a dropdown rather than a checkbox because those are three distinct states: an untouched checkbox could not be told apart from a deliberate *Off*. There is no plugin-level setting for it either — the organization setting already is the global default.
+
+Links are rewritten **at publish time, per channel**, so a note going to two accounts on the same platform gets distinct codes. Shortening is **skipped** for any channel where the rewrite would push the post past that platform's character limit — a short URL is 28 characters and can be *longer* than the link it replaces, so on X (280) or Bluesky (300) a note that fit could otherwise fail to publish. The post still goes out with its original links, and records no clicks for that channel.
+
 
 ## Team approval
 

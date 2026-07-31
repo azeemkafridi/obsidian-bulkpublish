@@ -76,6 +76,13 @@ export interface CreatePostBody {
 	 * without post:publish (contributors), regardless of this flag.
 	 */
 	requestApproval?: boolean;
+	/**
+	 * Optional per-post override for bulkpubli.sh link tracking. true forces the
+	 * post's links to be shortened and their clicks counted, false forces them
+	 * to publish as written. Omit to inherit the organization's setting —
+	 * omitting is NOT the same as sending false.
+	 */
+	linkTrackingOverride?: boolean;
 }
 
 export class BulkPublishError extends Error {

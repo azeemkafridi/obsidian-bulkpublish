@@ -156,6 +156,7 @@ export default class BulkPublishPlugin extends Plugin {
 			frontmatterChannels: fm.channels,
 			frontmatterSchedule: fm.schedule,
 			frontmatterRequestApproval: fm.requestApproval,
+			frontmatterLinkTracking: fm.linkTracking,
 		}).open();
 	}
 
@@ -276,12 +277,15 @@ interface PublishModalInput {
 	frontmatterChannels: string[];
 	frontmatterSchedule: string | null;
 	frontmatterRequestApproval: boolean | null;
+	frontmatterLinkTracking: boolean | null;
 }
 
 class PublishModal extends Modal {
 	private caption: string;
 	private scheduleInput: string;
 	private requestApproval: boolean;
+	/** Tri-state: true/false override, null = inherit the org setting. */
+	private linkTracking: boolean | null;
 	private approvalHintEl: HTMLElement | null = null;
 	private selectedChannelIds = new Set<string>();
 	private includedEmbeds = new Set<string>(); // by link
@@ -307,6 +311,9 @@ class PublishModal extends Modal {
 		this.scheduleInput = input.frontmatterSchedule ?? "";
 		this.requestApproval =
 			input.frontmatterRequestApproval ?? plugin.settings.requestApproval;
+		// No plugin-setting fallback: null already means "use the organization's
+		// Link Tracking setting", which is the account-wide control.
+		this.linkTracking = input.frontmatterLinkTracking ?? null;
 		for (const e of input.embeds) this.includedEmbeds.add(e.link);
 	}
 
@@ -371,6 +378,34 @@ class PublishModal extends Modal {
 		approvalCb.addEventListener("change", () => {
 			this.requestApproval = approvalCb.checked;
 			this.refreshApprovalHint();
+		});
+
+		// --- Link tracking ---
+		// A dropdown rather than a checkbox: the value is tri-state, and the
+		// default must stay "inherit the organization setting" rather than off.
+		const linkSection = contentEl.createDiv({ cls: "bp-section" });
+		const linkRow = linkSection.createDiv({ cls: "bp-approval-row" });
+		linkRow.createSpan({ text: "Link tracking" });
+		const linkSelect = linkRow.createEl("select");
+		for (const [value, label] of [
+			["inherit", "Use organization setting"],
+			["on", "On — shorten links, count clicks"],
+			["off", "Off — links as written"],
+		] as Array<[string, string]>) {
+			const opt = linkSelect.createEl("option", { text: label });
+			opt.value = value;
+		}
+		linkSelect.value =
+			this.linkTracking === true ? "on" : this.linkTracking === false ? "off" : "inherit";
+		linkSection.createDiv({
+			cls: "bp-hint",
+			text:
+				"Shortens links through bulkpubli.sh and counts clicks. Skipped on a channel if the " +
+				"rewrite would push the post over that platform's character limit.",
+		});
+		linkSelect.addEventListener("change", () => {
+			this.linkTracking =
+				linkSelect.value === "on" ? true : linkSelect.value === "off" ? false : null;
 		});
 
 		// --- Embedded media ---
@@ -715,6 +750,9 @@ class PublishModal extends Modal {
 					? Intl.DateTimeFormat().resolvedOptions().timeZone
 					: undefined,
 				...(wantsApproval ? { requestApproval: true } : {}),
+				// Omitted when null so the post inherits the organization
+				// setting; false is sent and means "links as written".
+				...(this.linkTracking === null ? {} : { linkTrackingOverride: this.linkTracking }),
 			});
 
 			// 3) Publish now (if not scheduled) and poll for outcomes

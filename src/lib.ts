@@ -93,6 +93,12 @@ export interface BulkPublishFrontmatter {
 	status: string | null;
 	/** true/false override for the "Request approval" setting (null = use setting). */
 	requestApproval: boolean | null;
+	/**
+	 * true/false override for bulkpubli.sh link tracking.
+	 * null = inherit the organization's Link Tracking setting, which is NOT the
+	 * same as false ("publish the links as written").
+	 */
+	linkTracking: boolean | null;
 }
 
 function unquote(value: string): string {
@@ -120,6 +126,7 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 		postId: null,
 		status: null,
 		requestApproval: null,
+		linkTracking: null,
 	};
 	if (!fmText) return result;
 
@@ -175,6 +182,14 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 				const v = unquote(value).toLowerCase();
 				if (v === "true" || v === "yes") result.requestApproval = true;
 				else if (v === "false" || v === "no") result.requestApproval = false;
+				break;
+			}
+			case "bulkpublish-link-tracking": {
+				// Tri-state: anything unrecognised leaves it null (inherit)
+				// rather than guessing "off".
+				const v = unquote(value).toLowerCase();
+				if (v === "true" || v === "yes" || v === "on") result.linkTracking = true;
+				else if (v === "false" || v === "no" || v === "off") result.linkTracking = false;
 				break;
 			}
 		}

@@ -395,3 +395,20 @@ test("computeParts: file smaller than one part", () => {
 test("computeParts: zero size returns no parts", () => {
 	assert.deepEqual(computeParts(0, MB10), []);
 });
+
+test("parseBulkPublishFrontmatter: bulkpublish-link-tracking is tri-state", () => {
+	// Absent → null, i.e. inherit the organization's Link Tracking setting.
+	// This must not be false, which means "publish the links as written".
+	assert.equal(parseBulkPublishFrontmatter("title: Hi").linkTracking, null);
+	assert.equal(parseBulkPublishFrontmatter(null).linkTracking, null);
+
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: true").linkTracking, true);
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: on").linkTracking, true);
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: yes").linkTracking, true);
+
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: false").linkTracking, false);
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: off").linkTracking, false);
+
+	// Unrecognised values inherit rather than guessing.
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: maybe").linkTracking, null);
+});
