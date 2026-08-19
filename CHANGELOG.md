@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0 (2026-08-19)
+
+- **Snapchat support (16th platform).** `snapchat` added to the platform character-limit map (160 — the caption is only used as the Spotlight description and as a saved-story title fallback; plain Snapchat stories carry no text) and display names. Every Snapchat post requires exactly ONE media file: a jpg/png image or an mp4 video; Spotlight is video-only (6-60s). Post types: `story` (default), `saved_story`, `spotlight`.
+
 ## 1.4.0 (2026-08-01)
 
 - **Link tracking**: new **Link tracking** dropdown in the publish modal (and a `bulkpublish-link-tracking` frontmatter override) sets `linkTrackingOverride` — *On* shortens the note's links through bulkpubli.sh and counts the clicks, *Off* publishes them as written, and *Use organization setting* (the default) inherits. A dropdown rather than a checkbox because the field is tri-state: an untouched checkbox could not be told apart from a deliberate *Off*. There is deliberately no plugin-level setting, since the organization setting already is the global default.
