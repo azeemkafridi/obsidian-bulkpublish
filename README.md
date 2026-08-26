@@ -1,6 +1,6 @@
 # BulkPublish for Obsidian
 
-Publish the current note — or just a selection — to 14 social media platforms straight from your vault, powered by [BulkPublish](https://bulkpublish.com).
+Publish the current note — or just a selection — to 15 social media platforms straight from your vault, powered by [BulkPublish](https://bulkpublish.com).
 
 - **Two commands**: *Publish note to social…* and *Publish selection to social…*
 - **Caption prefilled** from the note (frontmatter removed, markdown optionally stripped to plain text)
