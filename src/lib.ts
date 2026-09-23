@@ -529,3 +529,52 @@ export const APPROVAL_REQUIRED_MESSAGE =
 export function approvalAwareMessage(code: string | undefined, fallback: string): string {
 	return code === "APPROVAL_REQUIRED" ? APPROVAL_REQUIRED_MESSAGE : fallback;
 }
+
+/**
+ * What an approval did, read from the post POST /api/posts/{id}/approve
+ * returned. `ok` is false when the post was approved but will NOT publish: a
+ * 'draft' with a past scheduledAt means its time passed more than 15 minutes
+ * before approval, so the author was asked to choose a new time.
+ */
+export function approvalOutcome(
+	post: { status?: string; scheduledAt?: string | null } | null | undefined,
+	now: number = Date.now()
+): { ok: boolean; text: string } {
+	if (post?.status === "draft") {
+		const scheduledMs = post.scheduledAt ? new Date(post.scheduledAt).getTime() : NaN;
+		if (Number.isFinite(scheduledMs) && scheduledMs <= now) {
+			return {
+				ok: false,
+				text:
+					"Approved, but its scheduled time had already passed, so it was not published. " +
+					"It is kept as a draft and the author has been asked to choose a new time.",
+			};
+		}
+		return {
+			ok: false,
+			text: "Approved. It is still a draft, so it will not publish until it is scheduled or published.",
+		};
+	}
+	if (post?.status === "publishing") {
+		return { ok: true, text: "Approved — publishing now." };
+	}
+	return { ok: true, text: "Approved — publishes at its scheduled time." };
+}
+
+/**
+ * Message for a failed approve/reject call. 409 means the post stopped
+ * awaiting approval while the request was in flight.
+ */
+export function reviewErrorMessage(
+	action: "Approve" | "Reject",
+	status: number | undefined,
+	fallback: string
+): string {
+	if (status === 409) {
+		return (
+			"This post is no longer waiting for approval — someone else approved, rejected or " +
+			"withdrew it. Reopen the queue and review again."
+		);
+	}
+	return `${action} failed: ${fallback}`;
+}

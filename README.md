@@ -96,12 +96,12 @@ Links are rewritten **at publish time, per channel**, so a note going to two acc
 
 ## Team approval
 
-Approval is **orthogonal to the post status**: a post with approval status `pending` or `rejected` is skipped by the scheduler even when it is scheduled and overdue.
+Approval is **orthogonal to the post status**: a post with approval status `pending` or `rejected` does not publish, even when it is scheduled and its time has come.
 
 - Tick **Request approval before publishing** in the modal (or set the **Request approval** setting / `bulkpublish-request-approval` frontmatter) to hold a *scheduled* post for review — its approval status becomes `pending`. It only applies to scheduled posts; an immediate publish is never held.
 - If your role lacks publish rights (contributors), the server holds your scheduled posts for approval **whether or not you tick the box**, and publishing directly fails with `APPROVAL_REQUIRED` — the plugin then tells you to submit for approval instead.
-- The command **Review posts awaiting approval…** lists everything with approval status `pending` and offers **Approve** and **Reject…** (with an optional reason, max 2000 characters, shown to the author). Approving publishes at the scheduled time — immediately if that time has already passed. Rejecting returns the post to draft with the reason, and notifies the author.
-- Approve/reject require a role with `post:approve` (owner, admin, approver); other roles get a 403.
+- The command **Review posts awaiting approval…** lists everything with approval status `pending` and offers **Approve** and **Reject…** (with an optional reason, max 2000 characters, shown to the author). Approving publishes at the scheduled time, or immediately if that time passed less than 15 minutes ago. If the scheduled time passed more than 15 minutes ago, the post is approved but **not** published: it comes back as a `draft` (approval status `approved`, scheduled time unchanged), the queue says so, and the author is notified to choose a new time. Rejecting returns the post to draft with the reason, and notifies the author.
+- Approve/reject require a role with `post:approve` (owner, admin, approver); other roles get a 403. Both return 409 when the post stopped awaiting approval while the request was in flight (approved, rejected or withdrawn by someone else) — reopen the queue and review again.
 
 ## Costs and quotas
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.2 (2026-09-23)
+
+### Changed
+
+- Approval wording updated for the new approve rule: an approved post publishes
+  at its scheduled time, or immediately if that time passed less than 15 minutes
+  ago. If it passed longer ago, the post is approved but kept as a `draft`
+  (scheduled time unchanged) and the author is notified to choose a new time.
+- The approval queue now reads the post the approve call returns and says when
+  it was approved but not published because its time had passed (new
+  `approvalOutcome` helper).
+- Approve/reject 409 (the post stopped awaiting approval while the request was
+  in flight — approved, rejected or withdrawn by someone else) is explained
+  (new `reviewErrorMessage` helper).
+
 ## 1.5.1 (2026-08-26)
 
 ### Changed

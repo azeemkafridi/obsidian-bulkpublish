@@ -5,6 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	approvalOutcome,
 	buildCaption,
 	containsUrl,
 	estimateXCost,
@@ -15,6 +16,7 @@ import {
 	platformLabel,
 	resolveChannels,
 	resolveTargets,
+	reviewErrorMessage,
 	computeParts,
 	splitFrontmatter,
 	stripMarkdown,
@@ -411,4 +413,21 @@ test("parseBulkPublishFrontmatter: bulkpublish-link-tracking is tri-state", () =
 
 	// Unrecognised values inherit rather than guessing.
 	assert.equal(parseBulkPublishFrontmatter("bulkpublish-link-tracking: maybe").linkTracking, null);
+});
+
+test("approvalOutcome: released, late (time passed) or still a draft", () => {
+	const now = Date.parse("2026-09-23T12:00:00Z");
+	const scheduled = approvalOutcome({ status: "scheduled", scheduledAt: "2026-09-24T09:00:00Z" }, now);
+	assert.equal(scheduled.ok, true);
+	assert.match(scheduled.text, /scheduled time/);
+	assert.match(approvalOutcome({ status: "publishing" }, now).text, /publishing now/);
+	const late = approvalOutcome({ status: "draft", scheduledAt: "2026-09-23T10:00:00Z" }, now);
+	assert.equal(late.ok, false);
+	assert.match(late.text, /not published.*new time/);
+	assert.match(approvalOutcome({ status: "draft", scheduledAt: null }, now).text, /still a draft/);
+});
+
+test("reviewErrorMessage explains a 409", () => {
+	assert.match(reviewErrorMessage("Approve", 409, "x"), /no longer waiting for approval/);
+	assert.equal(reviewErrorMessage("Reject", 500, "boom"), "Reject failed: boom");
 });

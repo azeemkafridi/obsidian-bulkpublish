@@ -12,6 +12,7 @@ import {
 import {
 	approvalAwareMessage,
 	approvalLabel,
+	approvalOutcome,
 	buildCaption,
 	Channel,
 	ChannelSet,
@@ -24,6 +25,7 @@ import {
 	parseScheduleInput,
 	platformLabel,
 	resolveTargets,
+	reviewErrorMessage,
 	splitFrontmatter,
 	validateCharLimits,
 } from "./src/lib";
@@ -620,8 +622,10 @@ class PublishModal extends Modal {
 			el.addClass("bp-error-text");
 		} else {
 			el.setText(
-				"The post is held with approval status “pending” and is skipped by the scheduler until a teammate " +
-					"(owner, admin or approver) approves it — an overdue post publishes immediately on approval."
+				"The post is held with approval status “pending” and does not publish until a teammate " +
+					"(owner, admin or approver) approves it. Approved in time, it publishes as scheduled " +
+					"(or right away if its time passed less than 15 minutes ago); approved later, it is " +
+					"kept as a draft for you to reschedule."
 			);
 		}
 		this.refreshPublishLabel2();
@@ -952,15 +956,23 @@ class ApprovalQueueModal extends Modal {
 			approveBtn.addEventListener("click", async () => {
 				approveBtn.disabled = rejectBtn.disabled = true;
 				try {
-					await this.plugin.client().approvePost(post.id);
-					status.addClass("bp-result-ok");
-					status.setText(
-						"Approved — publishes at its scheduled time (immediately if it was overdue)."
-					);
+					const approved = await this.plugin.client().approvePost(post.id);
+					const outcome = approvalOutcome(approved);
+					status.removeClass("bp-error-text");
+					status.addClass(outcome.ok ? "bp-result-ok" : "bp-hint");
+					status.setText(outcome.text);
 				} catch (err) {
-					approveBtn.disabled = rejectBtn.disabled = false;
+					const conflict = err instanceof BulkPublishError && err.status === 409;
+					// A 409 means someone else already decided; retrying cannot help.
+					approveBtn.disabled = rejectBtn.disabled = conflict;
 					status.addClass("bp-error-text");
-					status.setText(`Approve failed: ${errMessage(err)}`);
+					status.setText(
+						reviewErrorMessage(
+							"Approve",
+							err instanceof BulkPublishError ? err.status : undefined,
+							errMessage(err)
+						)
+					);
 				}
 			});
 
@@ -972,9 +984,16 @@ class ApprovalQueueModal extends Modal {
 						status.removeClass("bp-result-ok");
 						status.setText("Rejected — back to draft; the author was notified.");
 					} catch (err) {
-						approveBtn.disabled = rejectBtn.disabled = false;
+						const conflict = err instanceof BulkPublishError && err.status === 409;
+						approveBtn.disabled = rejectBtn.disabled = conflict;
 						status.addClass("bp-error-text");
-						status.setText(`Reject failed: ${errMessage(err)}`);
+						status.setText(
+							reviewErrorMessage(
+								"Reject",
+								err instanceof BulkPublishError ? err.status : undefined,
+								errMessage(err)
+							)
+						);
 					}
 				}).open();
 			});

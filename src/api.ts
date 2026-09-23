@@ -44,8 +44,10 @@ export interface PostPlatformResult {
 
 /**
  * Team approval state, orthogonal to `status`. 'pending' and 'rejected' posts
- * are skipped by the scheduler even when scheduled and overdue; approving
- * releases them (an overdue post publishes immediately on approval).
+ * do not publish, even when scheduled and their time has come. Approving
+ * releases them: a post publishes at its scheduled time, or immediately if that
+ * time passed less than 15 minutes ago; past that it is approved but comes back
+ * as a 'draft' for the author to reschedule.
  */
 export type ApprovalStatus = "none" | "pending" | "approved" | "rejected";
 
@@ -224,8 +226,17 @@ export class BulkPublishClient {
 
 	/**
 	 * Approve a pending post. Requires a role with post:approve (owner, admin,
-	 * approver) — otherwise the API returns 403. The post publishes at its
-	 * scheduled time, or immediately if that time has already passed.
+	 * approver) — otherwise the API returns 403. Releases a post with
+	 * approvalStatus 'pending': it publishes at its scheduled time, or
+	 * immediately if that time passed less than 15 minutes ago. If the scheduled
+	 * time passed more than 15 minutes ago, the post is approved but not
+	 * published: it comes back with status 'draft' (approvalStatus 'approved',
+	 * scheduledAt unchanged) and the author is notified to choose a new time.
+	 * Returns the updated post; see approvalOutcome() in lib.ts.
+	 *
+	 * Approve and reject both return 409 CONFLICT when the post stopped awaiting
+	 * approval while the request was in flight (approved, rejected or withdrawn
+	 * by someone else). Reload it and review again.
 	 */
 	async approvePost(id: string): Promise<PostDetail> {
 		return this.request({ method: "POST", path: `/api/posts/${id}/approve`, json: {} });
