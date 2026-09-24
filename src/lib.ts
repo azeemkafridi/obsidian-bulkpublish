@@ -562,8 +562,61 @@ export function approvalOutcome(
 }
 
 /**
- * Message for a failed approve/reject call. 409 means the post stopped
- * awaiting approval while the request was in flight.
+ * The POST /api/posts body for the publish modal.
+ *
+ * Without a schedule the post is a draft that the modal publishes straight
+ * away. With approval requested and no schedule it is sent as `scheduled` for
+ * now instead: the API applies approval only to scheduled posts and ignores
+ * `requestApproval` on a draft. Held this way it does not publish until
+ * approved; approved within 15 minutes it publishes right away, approved later
+ * it comes back as an approved draft for the author to reschedule.
+ */
+export function buildPostBody(input: {
+	caption: string;
+	channelIds: string[];
+	mediaIds?: string[];
+	scheduledAt?: string | null;
+	timezone?: string;
+	requestApproval?: boolean;
+	linkTracking?: boolean | null;
+	now?: number;
+}): {
+	content: string;
+	channels: { channelId: string }[];
+	mediaFiles?: string[];
+	status: "draft" | "scheduled";
+	scheduledAt?: string;
+	timezone?: string;
+	requestApproval?: boolean;
+	linkTrackingOverride?: boolean;
+} {
+	const { caption, channelIds, mediaIds = [], scheduledAt = null, timezone } = input;
+	const requestApproval = !!input.requestApproval;
+	const body: ReturnType<typeof buildPostBody> = {
+		content: caption,
+		channels: channelIds.map((channelId) => ({ channelId })),
+		status: scheduledAt || requestApproval ? "scheduled" : "draft",
+	};
+	if (mediaIds.length > 0) body.mediaFiles = mediaIds;
+	if (scheduledAt) {
+		body.scheduledAt = scheduledAt;
+		if (timezone) body.timezone = timezone;
+	} else if (requestApproval) {
+		body.scheduledAt = new Date(input.now ?? Date.now()).toISOString();
+	}
+	// Sent only when true (the API default is false).
+	if (requestApproval) body.requestApproval = true;
+	// Omitted when null/undefined so the post inherits the organization
+	// setting; false is sent and means "links as written".
+	if (input.linkTracking === true || input.linkTracking === false) {
+		body.linkTrackingOverride = input.linkTracking;
+	}
+	return body;
+}
+
+/**
+ * Message for a failed approve/reject call. 409 means the post changed while
+ * it was being reviewed.
  */
 export function reviewErrorMessage(
 	action: "Approve" | "Reject",
@@ -572,8 +625,8 @@ export function reviewErrorMessage(
 ): string {
 	if (status === 409) {
 		return (
-			"This post is no longer waiting for approval — someone else approved, rejected or " +
-			"withdrew it. Reopen the queue and review again."
+			"This post changed while you were reviewing it — someone else approved, rejected or " +
+			"withdrew it, or its scheduled time moved. Reopen the queue and review again."
 		);
 	}
 	return `${action} failed: ${fallback}`;

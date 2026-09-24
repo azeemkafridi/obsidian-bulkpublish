@@ -13,6 +13,7 @@ import {
 	approvalAwareMessage,
 	approvalLabel,
 	approvalOutcome,
+	buildPostBody,
 	buildCaption,
 	Channel,
 	ChannelSet,
@@ -251,9 +252,9 @@ class BulkPublishSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Request approval")
 			.setDesc(
-				"Preselect “Request approval” in the publish modal: a scheduled post is held for a " +
+				"Preselect “Request approval” in the publish modal: the post is held for a " +
 					"teammate to review (approval status becomes “pending”) instead of going out at its " +
-					"scheduled time. If your role can't publish (contributor), the server holds scheduled " +
+					"scheduled time, or right away if it has none. If your role can't publish (contributor), the server holds scheduled " +
 					"posts for approval whether or not this is on. A note can override this with " +
 					"bulkpublish-request-approval frontmatter."
 			)
@@ -617,9 +618,11 @@ class PublishModal extends Modal {
 			);
 		} else if (!this.scheduleInput.trim()) {
 			el.setText(
-				"Approval applies to scheduled posts only — pick a date/time above, or the post publishes immediately."
+				"The post is submitted for now and held with approval status “pending” — it does not " +
+					"publish until a teammate (owner, admin or approver) approves it. Approved within 15 " +
+					"minutes, it publishes right away; approved later, it is kept as a draft for you to " +
+					"reschedule."
 			);
-			el.addClass("bp-error-text");
 		} else {
 			el.setText(
 				"The post is held with approval status “pending” and does not publish until a teammate " +
@@ -636,7 +639,7 @@ class PublishModal extends Modal {
 		if (!this.publishBtn) return;
 		const scheduled = !!this.scheduleInput.trim();
 		this.publishBtn.setText(
-			scheduled ? (this.requestApproval ? "Submit for approval" : "Schedule") : "Publish"
+			this.requestApproval ? "Submit for approval" : scheduled ? "Schedule" : "Publish"
 		);
 	}
 
@@ -740,42 +743,43 @@ class PublishModal extends Modal {
 			}
 
 			// 2) Create the post
-			this.publishBtn.setText(scheduledAt ? "Scheduling…" : "Publishing…");
-			// requestApproval only means anything for a scheduled post, and is
-			// sent only when true (the API default is false).
-			const wantsApproval = !!scheduledAt && this.requestApproval;
-			const created = await client.createPost({
-				content: this.caption,
-				channels: channelIds.map((channelId) => ({ channelId })),
-				mediaFiles: mediaIds.length > 0 ? mediaIds : undefined,
-				status: scheduledAt ? "scheduled" : "draft",
-				scheduledAt: scheduledAt ?? undefined,
-				timezone: scheduledAt
-					? Intl.DateTimeFormat().resolvedOptions().timeZone
-					: undefined,
-				...(wantsApproval ? { requestApproval: true } : {}),
-				// Omitted when null so the post inherits the organization
-				// setting; false is sent and means "links as written".
-				...(this.linkTracking === null ? {} : { linkTrackingOverride: this.linkTracking }),
-			});
+			const wantsApproval = this.requestApproval;
+			this.publishBtn.setText(
+				wantsApproval ? "Submitting…" : scheduledAt ? "Scheduling…" : "Publishing…"
+			);
+			// An approval request without a schedule goes as scheduled-for-now,
+			// never as a draft: the API ignores requestApproval on a draft, and
+			// the draft would then be published below with no review.
+			const created = await client.createPost(
+				buildPostBody({
+					caption: this.caption,
+					channelIds,
+					mediaIds,
+					scheduledAt,
+					timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+					requestApproval: wantsApproval,
+					linkTracking: this.linkTracking,
+				})
+			);
 
-			// 3) Publish now (if not scheduled) and poll for outcomes
-			let finalStatus = created.status ?? (scheduledAt ? "scheduled" : "draft");
-			if (!scheduledAt) {
+			// The server can force approval even when we didn't ask (roles
+			// without post:publish always get 'pending'), so trust the response.
+			const approval = created.approvalStatus ?? (wantsApproval ? "pending" : "none");
+
+			// 3) Publish now (only an unheld draft) and poll for outcomes
+			let finalStatus =
+				created.status ?? (scheduledAt || wantsApproval ? "scheduled" : "draft");
+			if (!scheduledAt && !wantsApproval && approval !== "pending") {
 				await client.publishPost(created.id);
 				const detail = await this.pollOutcomes(created.id);
 				finalStatus = detail?.status ?? "publishing";
 				this.renderOutcomes(detail);
-			} else {
+			} else if (scheduledAt) {
 				this.resultsEl.createDiv({
 					cls: "bp-result-ok",
 					text: `Scheduled for ${new Date(scheduledAt).toLocaleString()} (post ${created.id}).`,
 				});
 			}
-
-			// The server can force approval even when we didn't ask (roles
-			// without post:publish always get 'pending'), so trust the response.
-			const approval = created.approvalStatus ?? (wantsApproval ? "pending" : "none");
 			if (approval === "pending") {
 				this.resultsEl.createDiv({
 					text:
@@ -804,12 +808,11 @@ class PublishModal extends Modal {
 				this.resultsEl.createDiv({
 					cls: "bp-error-text",
 					text:
-						"Tip: tick “Request approval” and pick a schedule — the post will be queued " +
-						"for a teammate to approve.",
+						"Tip: tick “Request approval” — the post will be queued for a teammate to approve.",
 				});
 			}
 			this.publishBtn.disabled = false;
-			this.publishBtn.setText(scheduledAt ? "Schedule" : "Publish");
+			this.refreshPublishLabel2();
 			this.publishing = false;
 		}
 	}

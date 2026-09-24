@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
 	approvalOutcome,
+	buildPostBody,
 	buildCaption,
 	containsUrl,
 	estimateXCost,
@@ -428,6 +429,30 @@ test("approvalOutcome: released, late (time passed) or still a draft", () => {
 });
 
 test("reviewErrorMessage explains a 409", () => {
-	assert.match(reviewErrorMessage("Approve", 409, "x"), /no longer waiting for approval/);
+	assert.match(reviewErrorMessage("Approve", 409, "x"), /changed while you were reviewing it/);
 	assert.equal(reviewErrorMessage("Reject", 500, "boom"), "Reject failed: boom");
+});
+
+test("buildPostBody: approval with no schedule is sent scheduled for now, never as a draft", () => {
+	const now = Date.parse("2026-09-24T08:00:00Z");
+	const held = buildPostBody({ caption: "Hi", channelIds: ["c1"], requestApproval: true, timezone: "Asia/Karachi", now });
+	assert.equal(held.status, "scheduled");
+	assert.equal(held.scheduledAt, "2026-09-24T08:00:00.000Z");
+	assert.equal(held.requestApproval, true);
+	assert.equal("timezone" in held, false);
+
+	const scheduled = buildPostBody({
+		caption: "Hi", channelIds: ["c1"], scheduledAt: "2026-10-01T04:00:00.000Z", timezone: "Asia/Karachi", requestApproval: true, now,
+	});
+	assert.equal(scheduled.status, "scheduled");
+	assert.equal(scheduled.scheduledAt, "2026-10-01T04:00:00.000Z");
+	assert.equal(scheduled.timezone, "Asia/Karachi");
+
+	const plain = buildPostBody({ caption: "Hi", channelIds: ["c1"], linkTracking: null, now });
+	assert.equal(plain.status, "draft");
+	assert.equal("scheduledAt" in plain, false);
+	assert.equal("requestApproval" in plain, false);
+	assert.equal("mediaFiles" in plain, false);
+	assert.equal("linkTrackingOverride" in plain, false);
+	assert.equal(buildPostBody({ caption: "Hi", channelIds: ["c1"], linkTracking: false }).linkTrackingOverride, false);
 });

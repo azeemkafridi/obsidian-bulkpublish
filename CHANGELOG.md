@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.5.3 (2026-09-24)
+
+### Fixed
+
+- **"Request approval before publishing" now holds a post that has no
+  schedule.** Approval used to apply only to scheduled posts, so with the box
+  ticked and no date the post was published straight away with no review (the
+  modal showed a warning, but the button still said *Publish*). It is now
+  submitted for the current time and held with approval status `pending`: it
+  does not publish until a teammate approves it. Approved within 15 minutes it
+  publishes right away; approved later it is kept as a draft to reschedule. The
+  button reads *Submit for approval* whenever the box is ticked. The body is
+  built by the new `buildPostBody()` in lib.ts.
+
+### Changed
+
+- The approve/reject 409 message names every cause: someone else approved,
+  rejected or withdrew the post, or (approve only) its scheduled time moved.
+- The "can't publish directly" tip no longer asks you to pick a schedule.
+
 ## 1.5.2 (2026-09-23)
 
 ### Changed

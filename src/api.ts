@@ -74,8 +74,10 @@ export interface CreatePostBody {
 	timezone?: string;
 	/**
 	 * Optional. Set true to hold a scheduled post for team approval
-	 * (approvalStatus becomes 'pending'). Forced on server-side for roles
-	 * without post:publish (contributors), regardless of this flag.
+	 * (approvalStatus becomes 'pending'). Ignored on a draft, which is why
+	 * buildPostBody() in lib.ts sends an approval request as scheduled. Forced
+	 * on server-side for scheduled posts of roles without post:publish
+	 * (contributors), regardless of this flag.
 	 */
 	requestApproval?: boolean;
 	/**
@@ -234,9 +236,9 @@ export class BulkPublishClient {
 	 * scheduledAt unchanged) and the author is notified to choose a new time.
 	 * Returns the updated post; see approvalOutcome() in lib.ts.
 	 *
-	 * Approve and reject both return 409 CONFLICT when the post stopped awaiting
-	 * approval while the request was in flight (approved, rejected or withdrawn
-	 * by someone else). Reload it and review again.
+	 * Approve and reject both return 409 CONFLICT when the post changed while it
+	 * was being reviewed: someone else approved, rejected or withdrew it, or
+	 * (approve only) its scheduled time moved. Reload it and review again.
 	 */
 	async approvePost(id: string): Promise<PostDetail> {
 		return this.request({ method: "POST", path: `/api/posts/${id}/approve`, json: {} });

@@ -8,7 +8,7 @@ Publish the current note — or just a selection — to 15 social media platform
 - **Channel sets** — your saved channel groups appear as one-click buttons in the modal, and set names work anywhere channel names do (frontmatter, default channels)
 - **Large videos** — files over 100 MB upload in resumable 10 MB chunks (videos up to 1 GB, images up to 100 MB)
 - **Scheduling** via a date/time picker or frontmatter
-- **Team approval** — hold a scheduled post for review, and approve/reject the queue from a command
+- **Team approval** — hold a post for review, and approve/reject the queue from a command
 - **Embedded images/videos** (`![[photo.png]]`) detected and uploaded with the post — pick which ones to include
 - **"Before you publish" panel**: posts today/this month vs your plan limits, plus an X cost estimate and credit balance
 - **Per-platform results** after publishing (status, error, link to the live post), written back into the note's frontmatter
@@ -46,7 +46,7 @@ If you use the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin:
 | **Default channels** | Comma-separated names preselected in the publish modal, e.g. `x, linkedin`. Names match a saved channel set first, then a platform or account name. Frontmatter overrides this. |
 | **Strip markdown** | Convert markdown to plain text for the caption (headings, bold, links, list markers, wiki links…). Recommended. |
 | **Append note link** | Appends the note's `share-url` frontmatter value (if present) to the caption. **A URL makes X posts cost ~13× more credits** — see below. |
-| **Request approval** | Preselects *Request approval before publishing* in the modal, holding scheduled posts for a teammate to review. |
+| **Request approval** | Preselects *Request approval before publishing* in the modal, holding posts for a teammate to review. |
 
 ### API key security
 
@@ -60,7 +60,7 @@ Drive the publish modal from note frontmatter:
 ---
 bulkpublish-channels: [x, linkedin]   # platform names or account names; preselects channels
 bulkpublish-schedule: 2026-07-01T09:00 # local time; prefills the schedule picker
-bulkpublish-request-approval: true     # hold this scheduled post for team approval
+bulkpublish-request-approval: true     # hold this post for team approval
 bulkpublish-link-tracking: on          # on | off — omit to use your organization setting
 share-url: https://myblog.com/post    # used by the "Append note link" setting
 ---
@@ -98,10 +98,10 @@ Links are rewritten **at publish time, per channel**, so a note going to two acc
 
 Approval is **orthogonal to the post status**: a post with approval status `pending` or `rejected` does not publish, even when it is scheduled and its time has come.
 
-- Tick **Request approval before publishing** in the modal (or set the **Request approval** setting / `bulkpublish-request-approval` frontmatter) to hold a *scheduled* post for review — its approval status becomes `pending`. It only applies to scheduled posts; an immediate publish is never held.
+- Tick **Request approval before publishing** in the modal (or set the **Request approval** setting / `bulkpublish-request-approval` frontmatter) to hold the post for review — its approval status becomes `pending`. Without a schedule the post is submitted for now and held the same way (approval applies only to scheduled posts, so it is not sent as a draft): approved within 15 minutes it publishes right away, approved later it is kept as a draft to reschedule.
 - If your role lacks publish rights (contributors), the server holds your scheduled posts for approval **whether or not you tick the box**, and publishing directly fails with `APPROVAL_REQUIRED` — the plugin then tells you to submit for approval instead.
 - The command **Review posts awaiting approval…** lists everything with approval status `pending` and offers **Approve** and **Reject…** (with an optional reason, max 2000 characters, shown to the author). Approving publishes at the scheduled time, or immediately if that time passed less than 15 minutes ago. If the scheduled time passed more than 15 minutes ago, the post is approved but **not** published: it comes back as a `draft` (approval status `approved`, scheduled time unchanged), the queue says so, and the author is notified to choose a new time. Rejecting returns the post to draft with the reason, and notifies the author.
-- Approve/reject require a role with `post:approve` (owner, admin, approver); other roles get a 403. Both return 409 when the post stopped awaiting approval while the request was in flight (approved, rejected or withdrawn by someone else) — reopen the queue and review again.
+- Approve/reject require a role with `post:approve` (owner, admin, approver); other roles get a 403. Both return 409 when the post changed while you were reviewing it (someone else approved, rejected or withdrew it, or its scheduled time moved) — reopen the queue and review again.
 
 ## Costs and quotas
 
