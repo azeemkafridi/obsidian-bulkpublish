@@ -620,8 +620,8 @@ export function buildPostBody(input: {
 }
 
 /**
- * Message for a failed approve/reject call. 409 means the post changed while
- * it was being reviewed.
+ * Message for a failed approve/reject call. 409 means the post changed since
+ * the queue loaded it, or is no longer awaiting approval.
  */
 export function reviewErrorMessage(
 	action: "Approve" | "Reject",
@@ -630,8 +630,8 @@ export function reviewErrorMessage(
 ): string {
 	if (status === 409) {
 		return (
-			"This post changed while you were reviewing it — someone else approved, rejected or " +
-			"withdrew it, or its scheduled time moved. Reopen the queue and review again."
+			"This post changed since you loaded it, or is no longer awaiting approval. " +
+			"Reopen the queue and review what is there now."
 		);
 	}
 	return `${action} failed: ${fallback}`;

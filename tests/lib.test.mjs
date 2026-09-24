@@ -429,7 +429,7 @@ test("approvalOutcome: released, late (time passed) or still a draft", () => {
 });
 
 test("reviewErrorMessage explains a 409", () => {
-	assert.match(reviewErrorMessage("Approve", 409, "x"), /changed while you were reviewing it/);
+	assert.match(reviewErrorMessage("Approve", 409, "x"), /changed since you loaded it/);
 	assert.equal(reviewErrorMessage("Reject", 500, "boom"), "Reject failed: boom");
 });
 

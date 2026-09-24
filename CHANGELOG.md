@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.5 (2026-09-24)
+
+### Changed
+- **Review queue approves and rejects the version you saw.** Approve and Reject
+  send the post's last-changed time from when the queue loaded; if the post
+  changed since, nothing is changed and the queue says so.
+- The conflict message now reads: the post changed since you loaded it, or is no
+  longer awaiting approval. A moved scheduled time is not a cause.
+
 ## 1.5.4 (2026-09-24)
 
 ### Changed

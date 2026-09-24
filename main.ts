@@ -958,14 +958,14 @@ class ApprovalQueueModal extends Modal {
 			approveBtn.addEventListener("click", async () => {
 				approveBtn.disabled = rejectBtn.disabled = true;
 				try {
-					const approved = await this.plugin.client().approvePost(post.id);
+					const approved = await this.plugin.client().approvePost(post.id, post.updatedAt);
 					const outcome = approvalOutcome(approved);
 					status.removeClass("bp-error-text");
 					status.addClass(outcome.ok ? "bp-result-ok" : "bp-hint");
 					status.setText(outcome.text);
 				} catch (err) {
 					const conflict = err instanceof BulkPublishError && err.status === 409;
-					// A 409 means someone else already decided; retrying cannot help.
+					// A 409 means the post changed or was already decided; retrying cannot help.
 					approveBtn.disabled = rejectBtn.disabled = conflict;
 					status.addClass("bp-error-text");
 					status.setText(
@@ -982,7 +982,7 @@ class ApprovalQueueModal extends Modal {
 				new RejectReasonModal(this.app, async (reason) => {
 					approveBtn.disabled = rejectBtn.disabled = true;
 					try {
-						await this.plugin.client().rejectPost(post.id, reason);
+						await this.plugin.client().rejectPost(post.id, reason, post.updatedAt);
 						status.removeClass("bp-result-ok");
 						status.setText("Rejected — back to draft; the author was notified.");
 					} catch (err) {

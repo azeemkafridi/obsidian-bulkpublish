@@ -62,6 +62,8 @@ export interface PostDetail {
 	approvedAt?: string | null;
 	/** Reviewer's reason when approvalStatus is 'rejected'. */
 	rejectionReason?: string | null;
+	/** When the post last changed (ISO). Sent back as ifUnmodifiedSince on approve/reject. */
+	updatedAt?: string | null;
 	postPlatforms?: PostPlatformResult[];
 }
 
@@ -236,24 +238,34 @@ export class BulkPublishClient {
 	 * scheduledAt unchanged) and the author is notified to choose a new time.
 	 * Returns the updated post; see approvalOutcome() in lib.ts.
 	 *
-	 * Approve and reject both return 409 CONFLICT when the post changed while it
-	 * was being reviewed: someone else approved, rejected or withdrew it, or
-	 * (approve only) its scheduled time moved. Reload it and review again.
+	 * Approve and reject both turn publishWhenApproved off. Pass
+	 * `ifUnmodifiedSince` (the post's updatedAt as it was shown to the reviewer)
+	 * and the call fails with 409 CONFLICT, changing nothing, if the post changed
+	 * since. 409 also means the post is no longer awaiting approval. Reload it
+	 * and review again.
 	 */
-	async approvePost(id: string): Promise<PostDetail> {
-		return this.request({ method: "POST", path: `/api/posts/${id}/approve`, json: {} });
+	async approvePost(id: string, ifUnmodifiedSince?: string | null): Promise<PostDetail> {
+		return this.request({
+			method: "POST",
+			path: `/api/posts/${id}/approve`,
+			json: ifUnmodifiedSince ? { ifUnmodifiedSince } : {},
+		});
 	}
 
 	/**
 	 * Reject a pending post: it returns to draft with approvalStatus 'rejected'
-	 * and the optional reason, and the author is notified.
+	 * and the optional reason, and the author is notified. `ifUnmodifiedSince`
+	 * works as on approvePost().
 	 */
-	async rejectPost(id: string, reason?: string): Promise<PostDetail> {
+	async rejectPost(id: string, reason?: string, ifUnmodifiedSince?: string | null): Promise<PostDetail> {
 		const trimmed = (reason ?? "").trim();
+		const json: Record<string, string> = {};
+		if (trimmed) json.reason = trimmed.slice(0, 2000);
+		if (ifUnmodifiedSince) json.ifUnmodifiedSince = ifUnmodifiedSince;
 		return this.request({
 			method: "POST",
 			path: `/api/posts/${id}/reject`,
-			json: trimmed ? { reason: trimmed.slice(0, 2000) } : {},
+			json,
 		});
 	}
 
