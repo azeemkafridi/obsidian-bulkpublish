@@ -619,9 +619,8 @@ class PublishModal extends Modal {
 		} else if (!this.scheduleInput.trim()) {
 			el.setText(
 				"The post is submitted for now and held with approval status “pending” — it does not " +
-					"publish until a teammate (owner, admin or approver) approves it. Approved within 15 " +
-					"minutes, it publishes right away; approved later, it is kept as a draft for you to " +
-					"reschedule."
+					"publish until a teammate (owner, admin or approver) approves it, and it publishes " +
+					"as soon as it is approved."
 			);
 		} else {
 			el.setText(

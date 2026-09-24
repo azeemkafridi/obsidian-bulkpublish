@@ -440,6 +440,7 @@ test("buildPostBody: approval with no schedule is sent scheduled for now, never 
 	assert.equal(held.scheduledAt, "2026-09-24T08:00:00.000Z");
 	assert.equal(held.requestApproval, true);
 	assert.equal("timezone" in held, false);
+	assert.equal(held.publishWhenApproved, true);
 
 	const scheduled = buildPostBody({
 		caption: "Hi", channelIds: ["c1"], scheduledAt: "2026-10-01T04:00:00.000Z", timezone: "Asia/Karachi", requestApproval: true, now,
@@ -447,6 +448,7 @@ test("buildPostBody: approval with no schedule is sent scheduled for now, never 
 	assert.equal(scheduled.status, "scheduled");
 	assert.equal(scheduled.scheduledAt, "2026-10-01T04:00:00.000Z");
 	assert.equal(scheduled.timezone, "Asia/Karachi");
+	assert.equal("publishWhenApproved" in scheduled, false);
 
 	const plain = buildPostBody({ caption: "Hi", channelIds: ["c1"], linkTracking: null, now });
 	assert.equal(plain.status, "draft");

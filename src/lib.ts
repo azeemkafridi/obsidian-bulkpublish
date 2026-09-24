@@ -568,8 +568,9 @@ export function approvalOutcome(
  * away. With approval requested and no schedule it is sent as `scheduled` for
  * now instead: the API applies approval only to scheduled posts and ignores
  * `requestApproval` on a draft. Held this way it does not publish until
- * approved; approved within 15 minutes it publishes right away, approved later
- * it comes back as an approved draft for the author to reschedule.
+ * approved, and `publishWhenApproved` makes it publish as soon as it is
+ * approved, however late. A picked schedule keeps the default: approved more
+ * than 15 minutes late, it comes back as an approved draft to reschedule.
  */
 export function buildPostBody(input: {
 	caption: string;
@@ -588,6 +589,7 @@ export function buildPostBody(input: {
 	scheduledAt?: string;
 	timezone?: string;
 	requestApproval?: boolean;
+	publishWhenApproved?: boolean;
 	linkTrackingOverride?: boolean;
 } {
 	const { caption, channelIds, mediaIds = [], scheduledAt = null, timezone } = input;
@@ -603,6 +605,9 @@ export function buildPostBody(input: {
 		if (timezone) body.timezone = timezone;
 	} else if (requestApproval) {
 		body.scheduledAt = new Date(input.now ?? Date.now()).toISOString();
+		// No time was chosen, so the post should go out as soon as it is
+		// approved, however late. A picked schedule keeps the default hold.
+		body.publishWhenApproved = true;
 	}
 	// Sent only when true (the API default is false).
 	if (requestApproval) body.requestApproval = true;

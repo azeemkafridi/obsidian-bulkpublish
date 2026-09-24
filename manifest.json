@@ -1,7 +1,7 @@
 {
   "id": "bulkpublish",
   "name": "BulkPublish",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "minAppVersion": "1.5.0",
   "description": "Publish the current note (or a selection) to 14 social media platforms via BulkPublish \u2014 with frontmatter-driven channels, scheduling, and a cost/quota preview.",
   "author": "BulkPublish",

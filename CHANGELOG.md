@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.4 (2026-09-24)
+
+### Changed
+
+- **A post submitted for approval without a schedule now publishes as soon as
+  it is approved, however late.** Previously an approval more than 15 minutes
+  after submitting kept it as a draft to reschedule by hand. Posts with a
+  picked schedule are unchanged.
+
 ## 1.5.3 (2026-09-24)
 
 ### Fixed
