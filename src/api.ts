@@ -162,7 +162,7 @@ export class BulkPublishClient {
 		}
 		if (res.status >= 400) {
 			const message =
-				data?.error?.message ?? `BulkPublish API error (HTTP ${res.status})`;
+				(typeof data?.error === "string" ? data.error : data?.error?.message) ?? `BulkPublish API error (HTTP ${res.status})`;
 			throw new BulkPublishError(message, data?.error?.code, res.status);
 		}
 		return data as T;

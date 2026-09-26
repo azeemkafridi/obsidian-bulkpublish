@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.6 (2026-09-26)
+
+### Fixed
+
+- Error messages from requests that the API rejects with a plain-text error
+  (for example an upload of an unsupported file type, or an invalid filter on
+  the posts list) are now shown as sent, instead of a generic
+  "HTTP 400" message.
+
 ## 1.5.5 (2026-09-24)
 
 ### Changed
