@@ -4,7 +4,7 @@ Publish the current note — or just a selection — to 15 social media platform
 
 - **Two commands**: *Publish note to social…* and *Publish selection to social…*
 - **Caption prefilled** from the note (frontmatter removed, markdown optionally stripped to plain text)
-- **Channel checkboxes** for every connected account (X, LinkedIn, Facebook, Instagram, Threads, Bluesky, Mastodon, Pinterest, TikTok, YouTube, Google Business Profile, Reddit, Discord, Telegram)
+- **Channel checkboxes** for every connected account (Facebook, Instagram, X (Twitter), TikTok, YouTube, Threads, Bluesky, Pinterest, Google Business Profile, LinkedIn, Mastodon, Discord, Telegram, Tumblr, Snapchat)
 - **Channel sets** — your saved channel groups appear as one-click buttons in the modal, and set names work anywhere channel names do (frontmatter, default channels)
 - **Large videos** — files over 100 MB upload in resumable 10 MB chunks (videos up to 1 GB, images up to 100 MB)
 - **Scheduling** via a date/time picker or frontmatter
@@ -136,7 +136,22 @@ BulkPublish also supports RSS/Atom autoposting (feeds polled every 15 minutes; n
 
 ## Character limits
 
-The modal blocks publishing when the caption exceeds a selected platform's limit: X 280, Bluesky 300, Threads/Mastodon/Pinterest 500, Google Business Profile 1500, Instagram/TikTok 2200, LinkedIn 3000, YouTube 5000, Facebook 63,206.
+The modal blocks publishing when the caption exceeds a selected platform's limit:
+
+| Platform | Limit (characters) |
+|---|---|
+| Snapchat | 160 |
+| X (Twitter) | 280 |
+| Bluesky | 300 |
+| Threads, Mastodon, Pinterest | 500 |
+| Google Business Profile | 1,500 |
+| Discord | 2,000 |
+| Instagram, TikTok | 2,200 |
+| LinkedIn | 3,000 |
+| Telegram | 4,096 (with media, 1,024 fits under the image or video; a longer caption is sent as its own message just above it) |
+| YouTube | 5,000 |
+| Tumblr | 32,768 |
+| Facebook | 63,206 |
 
 ## Development
 
