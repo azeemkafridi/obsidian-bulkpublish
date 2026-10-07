@@ -162,6 +162,16 @@ npm run build  # production main.js
 npm test       # unit tests (node:test) for src/lib.ts
 ```
 
+## Releasing
+
+For maintainers:
+
+1. Bump the version in `manifest.json`, `package.json` and `package-lock.json`, add the new version to `versions.json` (mapped to the minimum app version), and add a `CHANGELOG.md` entry.
+2. Commit, then tag the commit with the bare version, with no `v` prefix: `git tag 1.6.0`.
+3. Push the tag: `git push origin 1.6.0`.
+
+The release workflow then tests and builds the plugin and creates a GitHub release for that tag with `main.js`, `manifest.json` and `styles.css` attached. It fails without releasing if the tag does not match the version in `manifest.json`.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
