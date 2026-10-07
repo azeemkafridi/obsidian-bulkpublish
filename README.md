@@ -15,6 +15,15 @@ Publish the current note — or just a selection — to 15 social media platform
 - **Per-platform results** after publishing (status, error, link to the live post), written back into the note's frontmatter
 - Per-platform **character-limit validation** before you can hit Publish
 
+## Disclosures
+
+- **An account is required.** The plugin publishes through your [BulkPublish](https://bulkpublish.com) account, using an API key you create there.
+- **Payment is required for some features.** BulkPublish has a free plan. Higher posting limits, more channels and team features need a paid plan, and posts to X (Twitter) use prepaid credits. See [bulkpublish.com/pricing](https://www.bulkpublish.com/pricing/).
+- **Network use.** The plugin talks only to BulkPublish (`app.bulkpublish.com`), and only when you open the publish or review window or publish something. It does so to list your connected channels and channel sets, show your plan usage, upload the images and videos you pick, and create, schedule, approve or reject posts. Videos over 100 MB are uploaded in parts through one-time upload links that BulkPublish provides. The plugin never contacts the social platforms itself: BulkPublish publishes on your behalf. Nothing is sent when Obsidian starts or while you write.
+- **What is sent.** Only the caption, media and settings of the post you are publishing. The rest of your vault stays on your device.
+- **No telemetry.** The plugin collects no usage data. How BulkPublish handles the posts you send is described in its [privacy policy](https://www.bulkpublish.com/privacy/).
+- **No files outside your vault** are read or written. The API key and settings are stored in the plugin's own data file inside the vault (see [API key security](#api-key-security)).
+
 ## Install
 
 ### Manual
