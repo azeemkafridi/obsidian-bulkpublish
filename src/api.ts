@@ -162,16 +162,15 @@ export class BulkPublishClient {
 		}
 
 		const res = await requestUrl(req);
-		let data: any = null;
+		let data: unknown = null;
 		try {
-			data = res.json;
+			data = res.json as unknown;
 		} catch {
 			// non-JSON response body
 		}
 		if (res.status >= 400) {
-			const message =
-				(typeof data?.error === "string" ? data.error : data?.error?.message) ?? `BulkPublish API error (HTTP ${res.status})`;
-			throw new BulkPublishError(message, data?.error?.code, res.status);
+			const { message, code } = readErrorBody(data);
+			throw new BulkPublishError(message ?? `BulkPublish API error (HTTP ${res.status})`, code, res.status);
 		}
 		return data as T;
 	}
@@ -335,7 +334,7 @@ export class BulkPublishClient {
 		const res = await this.request<{ file: { id: string } }>({
 			method: "POST",
 			path: "/api/media",
-			body: payload.buffer as ArrayBuffer,
+			body: payload.buffer,
 			contentType: `multipart/form-data; boundary=${boundary}`,
 		});
 		return res.file.id;
@@ -431,4 +430,20 @@ export class BulkPublishClient {
 			throw err;
 		}
 	}
+}
+
+/**
+ * Pulls the error message and code out of an error response, which is either
+ * `{ error: "message" }` or `{ error: { message, code } }`.
+ */
+function readErrorBody(data: unknown): { message?: string; code?: string } {
+	if (!data || typeof data !== "object") return {};
+	const error = (data as { error?: unknown }).error;
+	if (typeof error === "string") return { message: error };
+	if (!error || typeof error !== "object") return {};
+	const { message, code } = error as { message?: unknown; code?: unknown };
+	return {
+		message: typeof message === "string" ? message : undefined,
+		code: typeof code === "string" ? code : undefined,
+	};
 }

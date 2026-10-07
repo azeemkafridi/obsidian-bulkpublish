@@ -7,6 +7,7 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	SettingDefinitionItem,
 	TFile,
 } from "obsidian";
 import {
@@ -92,7 +93,7 @@ export default class BulkPublishPlugin extends Plugin {
 			checkCallback: (checking) => {
 				const file = this.app.workspace.getActiveFile();
 				if (!file || file.extension !== "md") return false;
-				if (!checking) this.openPublishModal(file, null);
+				if (!checking) void this.openPublishModal(file, null);
 				return true;
 			},
 		});
@@ -104,7 +105,7 @@ export default class BulkPublishPlugin extends Plugin {
 				const selection = editor.getSelection();
 				if (!selection || !selection.trim()) return false;
 				const file = view instanceof MarkdownView ? view.file : null;
-				if (!checking) this.openPublishModal(file, selection);
+				if (!checking) void this.openPublishModal(file, selection);
 				return true;
 			},
 		});
@@ -171,7 +172,8 @@ export default class BulkPublishPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = (await this.loadData()) as Partial<BulkPublishSettings> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
 	}
 
 	async saveSettings() {
@@ -188,91 +190,127 @@ class BulkPublishSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	/**
+	 * Each row's name and how to fill it in. Shared by both ways Obsidian can
+	 * draw this tab, so the two cannot drift apart.
+	 */
+	private rows(): { name: string; desc: string; build: (setting: Setting) => void }[] {
+		return [
+			{
+				name: "API key",
+				desc:
+					"Create a key at app.bulkpublish.com/developer. Stored in plugin data inside your vault — " +
+						"use a dedicated key and revoke it if your vault syncs to untrusted devices.",
+				build: (setting) => {
+					setting
+						.addText((text) => {
+							text.inputEl.type = "password";
+							text
+								.setPlaceholder("bp_…")
+								.setValue(this.plugin.settings.apiKey)
+								.onChange(async (value) => {
+									this.plugin.settings.apiKey = value.trim();
+									await this.plugin.saveSettings();
+								});
+						});
+				},
+			},
+			{
+				name: "Default channels",
+				desc:
+					'Comma-separated names preselected in the publish modal, e.g. "x, linkedin". ' +
+						"Names match a saved channel set first (sets are unique per organization, max 50), " +
+						"then a platform or account name. A note can override this with a " +
+						"bulkpublish-channels frontmatter list.",
+				build: (setting) => {
+					setting
+						.addText((text) =>
+							text
+								.setPlaceholder("x, linkedin")
+								.setValue(this.plugin.settings.defaultChannels)
+								.onChange(async (value) => {
+									this.plugin.settings.defaultChannels = value;
+									await this.plugin.saveSettings();
+								})
+						);
+				},
+			},
+			{
+				name: "Strip Markdown",
+				desc:
+					"Convert Markdown to plain text for captions (headings, bold, links, list markers…). Recommended.",
+				build: (setting) => {
+					setting
+						.addToggle((toggle) =>
+							toggle
+								.setValue(this.plugin.settings.stripMarkdown)
+								.onChange(async (value) => {
+									this.plugin.settings.stripMarkdown = value;
+									await this.plugin.saveSettings();
+								})
+						);
+				},
+			},
+			{
+				name: "Append note link",
+				desc:
+					"Vault notes have no public URL, so this appends the note's share-url frontmatter field " +
+						"(if present) to the caption. Note: a URL makes X posts cost ~13x more credits.",
+				build: (setting) => {
+					setting
+						.addToggle((toggle) =>
+							toggle
+								.setValue(this.plugin.settings.appendShareUrl)
+								.onChange(async (value) => {
+									this.plugin.settings.appendShareUrl = value;
+									await this.plugin.saveSettings();
+								})
+						);
+				},
+			},
+			{
+				name: "Request approval",
+				desc:
+					"Preselect “Request approval” in the publish modal: the post is held for a " +
+						"teammate to review (approval status becomes “pending”) instead of going out at its " +
+						"scheduled time, or right away if it has none. If your role can't publish (contributor), the server holds scheduled " +
+						"posts for approval whether or not this is on. A note can override this with " +
+						"bulkpublish-request-approval frontmatter.",
+				build: (setting) => {
+					setting
+						.addToggle((toggle) =>
+							toggle
+								.setValue(this.plugin.settings.requestApproval)
+								.onChange(async (value) => {
+									this.plugin.settings.requestApproval = value;
+									await this.plugin.saveSettings();
+								})
+						);
+				},
+			},
+		];
+	}
+
+	/**
+	 * Obsidian 1.13 and later draw the tab from these definitions, which is
+	 * also what puts the settings into Obsidian's settings search. Older
+	 * versions never call this and use display() below.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return this.rows().map((row) => ({
+			name: row.name,
+			desc: row.desc,
+			render: (setting: Setting) => row.build(setting.setName(row.name).setDesc(row.desc)),
+		}));
+	}
+
+	/** Used by Obsidian versions before 1.13. */
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName("API key")
-			.setDesc(
-				"Create a key at app.bulkpublish.com/developer. Stored in plugin data inside your vault — " +
-					"use a dedicated key and revoke it if your vault syncs to untrusted devices."
-			)
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text
-					.setPlaceholder("bp_…")
-					.setValue(this.plugin.settings.apiKey)
-					.onChange(async (value) => {
-						this.plugin.settings.apiKey = value.trim();
-						await this.plugin.saveSettings();
-					});
-			});
-
-		new Setting(containerEl)
-			.setName("Default channels")
-			.setDesc(
-				'Comma-separated names preselected in the publish modal, e.g. "x, linkedin". ' +
-					"Names match a saved channel set first (sets are unique per organization, max 50), " +
-					"then a platform or account name. A note can override this with a " +
-					"bulkpublish-channels frontmatter list."
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("x, linkedin")
-					.setValue(this.plugin.settings.defaultChannels)
-					.onChange(async (value) => {
-						this.plugin.settings.defaultChannels = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Strip markdown")
-			.setDesc(
-				"Convert markdown to plain text for captions (headings, bold, links, list markers…). Recommended."
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.stripMarkdown)
-					.onChange(async (value) => {
-						this.plugin.settings.stripMarkdown = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Append note link")
-			.setDesc(
-				"Vault notes have no public URL, so this appends the note's share-url frontmatter field " +
-					"(if present) to the caption. Note: a URL makes X posts cost ~13x more credits."
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.appendShareUrl)
-					.onChange(async (value) => {
-						this.plugin.settings.appendShareUrl = value;
-						await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName("Request approval")
-			.setDesc(
-				"Preselect “Request approval” in the publish modal: the post is held for a " +
-					"teammate to review (approval status becomes “pending”) instead of going out at its " +
-					"scheduled time, or right away if it has none. If your role can't publish (contributor), the server holds scheduled " +
-					"posts for approval whether or not this is on. A note can override this with " +
-					"bulkpublish-request-approval frontmatter."
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.requestApproval)
-					.onChange(async (value) => {
-						this.plugin.settings.requestApproval = value;
-						await this.plugin.saveSettings();
-					})
-			);
+		for (const row of this.rows()) {
+			row.build(new Setting(containerEl).setName(row.name).setDesc(row.desc));
+		}
 	}
 }
 
@@ -463,7 +501,7 @@ class PublishModal extends Modal {
 
 		// --- Before you publish ---
 		const previewSection = contentEl.createDiv({ cls: "bp-section bp-preview" });
-		previewSection.createEl("div", {
+		previewSection.createDiv({
 			text: "Before you publish",
 			cls: "bp-preview-title",
 		});
@@ -982,7 +1020,7 @@ class PublishModal extends Modal {
 
 	private renderOutcomes(detail: PostDetail | null) {
 		this.resultsEl.empty();
-		this.resultsEl.createEl("div", { text: "Results", cls: "bp-preview-title" });
+		this.resultsEl.createDiv({ text: "Results", cls: "bp-preview-title" });
 		const platforms = detail?.postPlatforms ?? [];
 		if (platforms.length === 0) {
 			this.resultsEl.createDiv({
@@ -1022,7 +1060,7 @@ class PublishModal extends Modal {
 		const file = this.input.file;
 		if (!file) return;
 		try {
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				fm["bulkpublish-post-id"] = postId;
 				fm["bulkpublish-status"] = status;
 				if (approval && approval !== "none") {
@@ -1110,7 +1148,7 @@ class ApprovalQueueModal extends Modal {
 			const rejectBtn = actions.createEl("button", { text: "Reject…" });
 			const status = row.createDiv();
 
-			approveBtn.addEventListener("click", async () => {
+			const approve = async () => {
 				approveBtn.disabled = rejectBtn.disabled = true;
 				try {
 					const approved = await this.plugin.client().approvePost(post.id, post.updatedAt);
@@ -1131,7 +1169,8 @@ class ApprovalQueueModal extends Modal {
 						)
 					);
 				}
-			});
+			};
+			approveBtn.addEventListener("click", () => void approve());
 
 			rejectBtn.addEventListener("click", () => {
 				new RejectReasonModal(this.app, async (reason) => {
@@ -1208,5 +1247,5 @@ function errMessage(err: unknown): string {
 }
 
 function sleep(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

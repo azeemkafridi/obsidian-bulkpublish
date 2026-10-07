@@ -1,6 +1,6 @@
 {
   "name": "obsidian-bulkpublish",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "BulkPublish for Obsidian — publish notes to 15 social media platforms from your vault",
   "keywords": [
     "obsidian",
@@ -22,12 +22,16 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "build:lib": "esbuild src/lib.ts --bundle --format=esm --platform=neutral --outfile=tests/build/lib.mjs",
-    "test": "npm run build:lib && node --test tests/lib.test.mjs"
+    "test": "npm run build:lib && node --test tests/lib.test.mjs",
+    "lint": "eslint main.ts src"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "esbuild": "^0.24.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
     "obsidian": "latest",
     "typescript": "^5.5.0",
-    "@types/node": "^22.0.0"
+    "typescript-eslint": "^8.71.1"
   }
 }

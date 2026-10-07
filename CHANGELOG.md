@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.6.2 (2026-10-07)
+
+### Changed
+
+- On Obsidian 1.13 and later, the plugin's settings show up when you search in Obsidian's settings. Older versions of Obsidian show the same settings as before.
+- "Strip markdown" is now labelled "Strip Markdown".
+- Small reliability fixes from the community plugin review: error messages from BulkPublish are read more carefully, and waiting between status checks works in pop-out windows. Nothing about publishing changes.
+
 ## 1.6.1 (2026-10-07)
 
 ### Changed
