@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # Build provenance: lets anyone verify the release files were built here.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -38,6 +41,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
+            manifest.json
 
       - name: Create release
         env:

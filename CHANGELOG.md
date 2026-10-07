@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.1 (2026-10-07)
+
+### Changed
+
+- The Publish button keeps its colour without overriding your theme with `!important`.
+- Each release now carries a signed record of how it was built, so you can check the files came from this repository.
+
 ## 1.6.0 (2026-10-07)
 
 ### Fixed

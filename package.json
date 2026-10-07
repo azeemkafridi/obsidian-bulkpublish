@@ -1,7 +1,7 @@
 {
   "name": "obsidian-bulkpublish",
-  "version": "1.6.0",
-  "description": "BulkPublish for Obsidian \u2014 publish notes to 15 social media platforms from your vault",
+  "version": "1.6.1",
+  "description": "BulkPublish for Obsidian — publish notes to 15 social media platforms from your vault",
   "keywords": [
     "obsidian",
     "obsidian-plugin",

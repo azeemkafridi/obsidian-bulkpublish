@@ -150,9 +150,10 @@
 	margin-top: 8px;
 }
 
-.bp-publish-btn {
-	background-color: var(--bp-accent) !important;
-	color: #fff !important;
+/* Specific enough to beat Obsidian's own button styling without !important. */
+.modal .bp-buttons button.bp-publish-btn {
+	background-color: var(--bp-accent);
+	color: #fff;
 	font-weight: 600;
 }
 
