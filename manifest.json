@@ -1,7 +1,7 @@
 {
   "id": "bulkpublish",
   "name": "BulkPublish",
-  "version": "1.5.6",
+  "version": "1.6.0",
   "minAppVersion": "1.5.0",
   "description": "Publish the current note or a selection to 15 social media platforms, including X, LinkedIn, Instagram, Threads and Bluesky, with frontmatter-driven channels, scheduling, team approval and a usage preview.",
   "author": "BulkPublish",

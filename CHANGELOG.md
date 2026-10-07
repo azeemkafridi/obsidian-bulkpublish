@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.6.0 (2026-10-07)
+
+### Fixed
+
+- **Posts to Discord no longer always fail.** A Discord server has many text
+  channels and nothing chose one, so every Discord destination failed with
+  "No Discord channel selected for this message".
+- **A platform that could not confirm the post no longer leaves the modal
+  waiting.** The result now reads *not confirmed* straight away, with a
+  warning to check the account before retrying, or it may post twice.
+  Previously it showed as still publishing until the modal stopped checking.
+  Only *published* counts as success.
+
+### Added
+
+- **Discord channel picker.** When a Discord server is selected, the publish
+  modal lists its text channels so you can choose where the post goes. It
+  starts on the server's default channel if one is saved. Publish stays
+  blocked until every selected Discord server has a channel.
+- Optional `bulkpublish-discord-channel` frontmatter: a channel name such as
+  `general`, `"#general"`, or the channel's id, preselected in the picker. A
+  name the server does not have is pointed out in the modal.
+
+### Docs
+
+- The plugin description and README name the 15 supported platforms, and the
+  character-limit list covers all of them, including Discord, Telegram,
+  Tumblr and Snapchat.
+- Added the MIT LICENSE file.
+
 ## 1.5.6 (2026-09-26)
 
 ### Fixed
