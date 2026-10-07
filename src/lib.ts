@@ -101,6 +101,11 @@ export interface BulkPublishFrontmatter {
 	 * same as false ("publish the links as written").
 	 */
 	linkTracking: boolean | null;
+	/**
+	 * Discord text channel to post in, for every Discord server selected:
+	 * a channel name ("general"), "#general", or the channel's id.
+	 */
+	discordChannel: string | null;
 }
 
 function unquote(value: string): string {
@@ -129,6 +134,7 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 		status: null,
 		requestApproval: null,
 		linkTracking: null,
+		discordChannel: null,
 	};
 	if (!fmText) return result;
 
@@ -194,6 +200,9 @@ export function parseBulkPublishFrontmatter(fmText: string | null): BulkPublishF
 				else if (v === "false" || v === "no" || v === "off") result.linkTracking = false;
 				break;
 			}
+			case "bulkpublish-discord-channel":
+				result.discordChannel = value ? unquote(value) || null : null;
+				break;
 		}
 	}
 	return result;
@@ -380,6 +389,8 @@ export interface Channel {
 	platform: string;
 	accountName: string;
 	isActive: boolean;
+	/** For Discord, `channelId` is the text channel saved as the server's default. */
+	metadata?: { channelId?: string | null } | null;
 }
 
 /**
@@ -580,6 +591,8 @@ export function buildPostBody(input: {
 	timezone?: string;
 	requestApproval?: boolean;
 	linkTracking?: boolean | null;
+	/** BulkPublish channel id → Discord text channel id, for each Discord server. */
+	discordChannels?: Record<string, string>;
 	now?: number;
 }): {
 	content: string;
@@ -591,6 +604,7 @@ export function buildPostBody(input: {
 	requestApproval?: boolean;
 	publishWhenApproved?: boolean;
 	linkTrackingOverride?: boolean;
+	platformSpecific?: { discord: Record<string, { channelId: string }> };
 } {
 	const { caption, channelIds, mediaIds = [], scheduledAt = null, timezone } = input;
 	const requestApproval = !!input.requestApproval;
@@ -616,6 +630,13 @@ export function buildPostBody(input: {
 	if (input.linkTracking === true || input.linkTracking === false) {
 		body.linkTrackingOverride = input.linkTracking;
 	}
+	// Discord: keyed by the BulkPublish channel id, the inner channelId is the
+	// Discord text channel inside that server.
+	const discord: Record<string, { channelId: string }> = {};
+	for (const [id, discordId] of Object.entries(input.discordChannels ?? {})) {
+		if (discordId) discord[String(id)] = { channelId: String(discordId) };
+	}
+	if (Object.keys(discord).length > 0) body.platformSpecific = { discord };
 	return body;
 }
 
@@ -636,3 +657,90 @@ export function reviewErrorMessage(
 	}
 	return `${action} failed: ${fallback}`;
 }
+
+// ---------------------------------------------------------------------------
+// Discord text channel selection
+// ---------------------------------------------------------------------------
+
+/** One postable text channel of a connected Discord server. */
+export interface DiscordChannelOption {
+	id: string;
+	name: string;
+}
+
+/**
+ * Pick which text channel of one Discord server to preselect.
+ *
+ * `wanted` (from the note's bulkpublish-discord-channel) is a channel name, a
+ * "#name", or an id, matched case-insensitively against `options`. With nothing
+ * wanted, the server's saved default is used when it is still one of the
+ * listed channels. If the channel list could not be loaded (`options` empty),
+ * an id-shaped `wanted` or the saved default is trusted as is.
+ *
+ * `unmatched` is set when `wanted` names a channel the server does not have.
+ */
+export function resolveDiscordChannel(
+	wanted: string | null | undefined,
+	savedDefault: string | null | undefined,
+	options: DiscordChannelOption[]
+): { channelId: string | null; unmatched: string | null } {
+	const raw = (wanted ?? "").trim();
+	if (raw) {
+		const value = raw.replace(/^#/, "").trim().toLowerCase();
+		const match =
+			options.find((o) => String(o.id) === value) ??
+			options.find((o) => (o.name ?? "").toLowerCase() === value);
+		if (match) return { channelId: String(match.id), unmatched: null };
+		if (options.length === 0 && /^\d+$/.test(value)) {
+			return { channelId: value, unmatched: null };
+		}
+		return { channelId: null, unmatched: raw };
+	}
+	const saved = savedDefault ? String(savedDefault) : "";
+	if (saved && (options.length === 0 || options.some((o) => String(o.id) === saved))) {
+		return { channelId: saved, unmatched: null };
+	}
+	return { channelId: null, unmatched: null };
+}
+
+/**
+ * Why a post to these Discord servers cannot go out yet, or null when every
+ * selected server has a text channel chosen.
+ */
+export function discordSelectionError(
+	servers: Array<{ id: string; accountName: string }>,
+	picks: Record<string, string | null | undefined>
+): string | null {
+	const missing = servers.find((s) => !picks[s.id]);
+	if (!missing) return null;
+	return `Choose which Discord channel to post in for "${missing.accountName}".`;
+}
+
+// ---------------------------------------------------------------------------
+// Per-destination publish status
+// ---------------------------------------------------------------------------
+
+/**
+ * Statuses a destination does not leave on its own. `unconfirmed` means the
+ * platform could not confirm the post: it may or may not be live, and it is
+ * never retried automatically.
+ */
+export const TERMINAL_PLATFORM_STATUSES = ["published", "failed", "unconfirmed"];
+
+export function isTerminalPlatformStatus(status: string | null | undefined): boolean {
+	return TERMINAL_PLATFORM_STATUSES.includes(status ?? "");
+}
+
+/** Only `published` counts as success. */
+export function platformOutcome(
+	status: string | null | undefined
+): "published" | "failed" | "unconfirmed" | "pending" {
+	if (status === "published") return "published";
+	if (status === "failed") return "failed";
+	if (status === "unconfirmed") return "unconfirmed";
+	return "pending";
+}
+
+export const UNCONFIRMED_MESSAGE =
+	"The platform could not confirm the post. Check the account before retrying, " +
+	"or it may post twice.";

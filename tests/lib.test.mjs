@@ -24,6 +24,12 @@ import {
 	validateCharLimits,
 	CHAR_LIMITS,
 	DEFAULT_X_COSTS,
+	resolveDiscordChannel,
+	discordSelectionError,
+	isTerminalPlatformStatus,
+	platformOutcome,
+	TERMINAL_PLATFORM_STATUSES,
+	UNCONFIRMED_MESSAGE,
 } from "./build/lib.mjs";
 
 // ---------------------------------------------------------------------------
@@ -457,4 +463,79 @@ test("buildPostBody: approval with no schedule is sent scheduled for now, never 
 	assert.equal("mediaFiles" in plain, false);
 	assert.equal("linkTrackingOverride" in plain, false);
 	assert.equal(buildPostBody({ caption: "Hi", channelIds: ["c1"], linkTracking: false }).linkTrackingOverride, false);
+});
+
+// ---------------------------------------------------------------------------
+// Discord text channel selection
+// ---------------------------------------------------------------------------
+
+const discordOptions = [
+	{ id: "111", name: "general" },
+	{ id: "222", name: "Announcements" },
+];
+
+test("frontmatter: bulkpublish-discord-channel", () => {
+	assert.equal(parseBulkPublishFrontmatter('bulkpublish-discord-channel: "#general"').discordChannel, "#general");
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-discord-channel: 222").discordChannel, "222");
+	assert.equal(parseBulkPublishFrontmatter("bulkpublish-discord-channel:").discordChannel, null);
+	assert.equal(parseBulkPublishFrontmatter(null).discordChannel, null);
+});
+
+test("resolveDiscordChannel: name, #name (any case) and id", () => {
+	assert.deepEqual(resolveDiscordChannel("general", null, discordOptions), { channelId: "111", unmatched: null });
+	assert.deepEqual(resolveDiscordChannel("#announcements", null, discordOptions), { channelId: "222", unmatched: null });
+	assert.deepEqual(resolveDiscordChannel(" 222 ", null, discordOptions), { channelId: "222", unmatched: null });
+});
+
+test("resolveDiscordChannel: an unknown name is reported, never replaced by the default", () => {
+	assert.deepEqual(resolveDiscordChannel("#random", "111", discordOptions), { channelId: null, unmatched: "#random" });
+});
+
+test("resolveDiscordChannel: saved default only when it is still a listed channel", () => {
+	assert.deepEqual(resolveDiscordChannel(null, "222", discordOptions), { channelId: "222", unmatched: null });
+	assert.deepEqual(resolveDiscordChannel("", "999", discordOptions), { channelId: null, unmatched: null });
+	assert.deepEqual(resolveDiscordChannel(null, null, discordOptions), { channelId: null, unmatched: null });
+});
+
+test("resolveDiscordChannel: list unavailable trusts an id or the saved default, not a name", () => {
+	assert.deepEqual(resolveDiscordChannel("333", null, []), { channelId: "333", unmatched: null });
+	assert.deepEqual(resolveDiscordChannel("general", null, []), { channelId: null, unmatched: "general" });
+	assert.deepEqual(resolveDiscordChannel(null, "444", []), { channelId: "444", unmatched: null });
+});
+
+test("discordSelectionError: names the first server without a channel", () => {
+	const servers = [
+		{ id: "7", accountName: "Team" },
+		{ id: "8", accountName: "Fans" },
+	];
+	assert.equal(discordSelectionError(servers, { 7: "111", 8: "222" }), null);
+	assert.equal(discordSelectionError([], {}), null);
+	assert.match(discordSelectionError(servers, { 7: "111" }), /Discord channel.*"Fans"/);
+});
+
+test("buildPostBody: Discord channel goes in platformSpecific.discord keyed by channel id", () => {
+	const body = buildPostBody({ caption: "Hi", channelIds: ["7", "3"], discordChannels: { 7: "111" } });
+	assert.deepEqual(body.platformSpecific, { discord: { 7: { channelId: "111" } } });
+	assert.equal("platformSpecific" in buildPostBody({ caption: "Hi", channelIds: ["3"] }), false);
+	assert.equal("platformSpecific" in buildPostBody({ caption: "Hi", channelIds: ["3"], discordChannels: {} }), false);
+});
+
+// ---------------------------------------------------------------------------
+// Per-destination status
+// ---------------------------------------------------------------------------
+
+test("isTerminalPlatformStatus: published, failed and unconfirmed are final", () => {
+	assert.deepEqual(TERMINAL_PLATFORM_STATUSES, ["published", "failed", "unconfirmed"]);
+	for (const s of ["published", "failed", "unconfirmed"]) assert.equal(isTerminalPlatformStatus(s), true, s);
+	for (const s of ["pending", "publishing", "processing", undefined, null, ""]) {
+		assert.equal(isTerminalPlatformStatus(s), false, String(s));
+	}
+});
+
+test("platformOutcome: only published is success; unconfirmed is its own failure", () => {
+	assert.equal(platformOutcome("published"), "published");
+	assert.equal(platformOutcome("failed"), "failed");
+	assert.equal(platformOutcome("unconfirmed"), "unconfirmed");
+	assert.equal(platformOutcome("processing"), "pending");
+	assert.match(UNCONFIRMED_MESSAGE, /could not confirm.*Check the account before retrying.*post twice/);
 });

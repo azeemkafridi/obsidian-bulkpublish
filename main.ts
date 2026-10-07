@@ -18,16 +18,22 @@ import {
 	Channel,
 	ChannelSet,
 	containsUrl,
+	DiscordChannelOption,
+	discordSelectionError,
 	estimateXCost,
 	extractEmbeds,
 	EmbeddedMedia,
 	formatDcents,
+	isTerminalPlatformStatus,
 	parseBulkPublishFrontmatter,
 	parseScheduleInput,
 	platformLabel,
+	platformOutcome,
+	resolveDiscordChannel,
 	resolveTargets,
 	reviewErrorMessage,
 	splitFrontmatter,
+	UNCONFIRMED_MESSAGE,
 	validateCharLimits,
 } from "./src/lib";
 import {
@@ -160,6 +166,7 @@ export default class BulkPublishPlugin extends Plugin {
 			frontmatterSchedule: fm.schedule,
 			frontmatterRequestApproval: fm.requestApproval,
 			frontmatterLinkTracking: fm.linkTracking,
+			frontmatterDiscordChannel: fm.discordChannel,
 		}).open();
 	}
 
@@ -281,6 +288,7 @@ interface PublishModalInput {
 	frontmatterSchedule: string | null;
 	frontmatterRequestApproval: boolean | null;
 	frontmatterLinkTracking: boolean | null;
+	frontmatterDiscordChannel: string | null;
 }
 
 class PublishModal extends Modal {
@@ -298,7 +306,15 @@ class PublishModal extends Modal {
 	private quota: QuotaUsage | null = null;
 	private xUsage: XUsage | null = null;
 	private publishing = false;
+	/** Per Discord server (BulkPublish channel id): its text channels, or null if they could not be loaded. */
+	private discordOptions = new Map<string, DiscordChannelOption[] | null>();
+	/** Per Discord server: the chosen text channel id. */
+	private discordPicks = new Map<string, string>();
+	/** Per Discord server: a bulkpublish-discord-channel value it has no channel for. */
+	private discordUnmatched = new Map<string, string>();
+	private discordLoading = new Set<string>();
 
+	private discordEl!: HTMLElement;
 	private validationEl!: HTMLElement;
 	private previewEl!: HTMLElement;
 	private resultsEl!: HTMLElement;
@@ -350,6 +366,10 @@ class PublishModal extends Modal {
 		channelSection.createEl("label", { text: "Channels", cls: "bp-label" });
 		const channelList = channelSection.createDiv({ cls: "bp-channels" });
 		channelList.setText("Loading channels…");
+
+		// --- Discord text channel (shown only while a Discord server is selected) ---
+		this.discordEl = contentEl.createDiv({ cls: "bp-section bp-discord" });
+		this.discordEl.hide();
 
 		// --- Schedule ---
 		const scheduleSection = contentEl.createDiv({ cls: "bp-section" });
@@ -546,6 +566,7 @@ class PublishModal extends Modal {
 			cb.addEventListener("change", () => {
 				if (cb.checked) this.selectedChannelIds.add(channel.id);
 				else this.selectedChannelIds.delete(channel.id);
+				this.refreshDiscordPickers();
 				this.refreshValidation();
 				this.refreshPreview();
 			});
@@ -555,8 +576,113 @@ class PublishModal extends Modal {
 			});
 		}
 
+		this.refreshDiscordPickers();
 		this.refreshValidation();
 		this.refreshPreview();
+	}
+
+	private selectedDiscordServers(): Channel[] {
+		return this.channels.filter(
+			(c) => c.platform === "discord" && this.selectedChannelIds.has(c.id)
+		);
+	}
+
+	/** One dropdown per selected Discord server: which of its text channels to post in. */
+	private refreshDiscordPickers() {
+		const el = this.discordEl;
+		if (!el) return;
+		el.empty();
+		const servers = this.selectedDiscordServers();
+		if (servers.length === 0) {
+			el.hide();
+			return;
+		}
+		el.show();
+		el.createEl("label", { text: "Discord channel", cls: "bp-label" });
+		for (const server of servers) {
+			const row = el.createDiv({ cls: "bp-approval-row" });
+			row.createSpan({ text: server.accountName });
+			const options = this.discordOptions.get(server.id);
+			if (options === undefined) {
+				row.createSpan({ text: "Loading channels…", cls: "bp-hint" });
+				void this.loadDiscordOptions(server);
+				continue;
+			}
+			const unmatched = this.discordUnmatched.get(server.id);
+			// Only said once the list is in: a list that failed to load proves nothing.
+			if (unmatched && options) {
+				el.createDiv({
+					cls: "bp-error-text",
+					text: `"${server.accountName}" has no channel named "${unmatched}". Choose one below.`,
+				});
+			}
+			if (options === null) {
+				row.createSpan({
+					cls: this.discordPicks.has(server.id) ? "bp-hint" : "bp-error-text",
+					text: this.discordPicks.has(server.id)
+						? "Could not load this server's channels; posting to its default channel."
+						: "Could not load this server's channels. Close and reopen to try again.",
+				});
+				continue;
+			}
+			if (options.length === 0) {
+				row.createSpan({
+					cls: "bp-error-text",
+					text: "No text channels found that BulkPublish can post in.",
+				});
+				continue;
+			}
+			const select = row.createEl("select");
+			const placeholder = select.createEl("option", { text: "Choose a channel…" });
+			placeholder.value = "";
+			for (const option of options) {
+				const opt = select.createEl("option", { text: `#${option.name}` });
+				opt.value = option.id;
+			}
+			select.value = this.discordPicks.get(server.id) ?? "";
+			select.addEventListener("change", () => {
+				if (select.value) this.discordPicks.set(server.id, select.value);
+				else this.discordPicks.delete(server.id);
+				this.discordUnmatched.delete(server.id);
+				this.refreshDiscordPickers();
+				this.refreshValidation();
+			});
+		}
+	}
+
+	private async loadDiscordOptions(server: Channel) {
+		if (this.discordLoading.has(server.id)) return;
+		this.discordLoading.add(server.id);
+		let options: DiscordChannelOption[] | null;
+		try {
+			options = await this.plugin.client().getDiscordChannels(server.id);
+		} catch {
+			options = null;
+		}
+		this.discordOptions.set(server.id, options);
+		this.discordLoading.delete(server.id);
+		// A server that answered with no text channels has nothing to pick from;
+		// a saved default or an id is trusted only when the list failed to load.
+		if (!this.discordPicks.has(server.id) && !(options && options.length === 0)) {
+			const { channelId, unmatched } = resolveDiscordChannel(
+				this.input.frontmatterDiscordChannel,
+				server.metadata?.channelId ?? null,
+				options ?? []
+			);
+			if (channelId) this.discordPicks.set(server.id, channelId);
+			if (unmatched) this.discordUnmatched.set(server.id, unmatched);
+		}
+		this.refreshDiscordPickers();
+		this.refreshValidation();
+	}
+
+	/** Why the selected Discord servers cannot be posted to yet, or null. */
+	private discordProblem(): string | null {
+		const servers = this.selectedDiscordServers();
+		if (servers.some((s) => this.discordLoading.has(s.id) || !this.discordOptions.has(s.id))) {
+			return "Discord channels are still loading.";
+		}
+		return discordSelectionError(servers, Object.fromEntries(this.discordPicks));
 	}
 
 	/** Select exactly the channels of a saved set (active channels only). */
@@ -568,6 +694,7 @@ class PublishModal extends Modal {
 			cb.checked = on;
 			if (on) this.selectedChannelIds.add(id);
 		}
+		this.refreshDiscordPickers();
 		this.refreshValidation();
 		this.refreshPreview();
 	}
@@ -599,6 +726,13 @@ class PublishModal extends Modal {
 		if (!this.validationEl) return;
 		this.validationEl.empty();
 		const messages = validateCharLimits(this.caption, this.selectedPlatforms());
+		const servers = this.selectedDiscordServers();
+		// Only once every server's channels have loaded, so "choose a channel"
+		// is not shown while the list is still on its way.
+		if (servers.every((s) => this.discordOptions.has(s.id))) {
+			const discord = discordSelectionError(servers, Object.fromEntries(this.discordPicks));
+			if (discord) messages.push(discord);
+		}
 		for (const message of messages) {
 			this.validationEl.createDiv({ cls: "bp-error-text", text: message });
 		}
@@ -710,6 +844,11 @@ class PublishModal extends Modal {
 			new Notice(`BulkPublish: ${violations[0]}`);
 			return;
 		}
+		const discordProblem = this.discordProblem();
+		if (discordProblem) {
+			new Notice(`BulkPublish: ${discordProblem}`);
+			return;
+		}
 		let scheduledAt: string | null = null;
 		if (this.scheduleInput.trim()) {
 			scheduledAt = parseScheduleInput(this.scheduleInput);
@@ -758,6 +897,11 @@ class PublishModal extends Modal {
 					timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 					requestApproval: wantsApproval,
 					linkTracking: this.linkTracking,
+					discordChannels: Object.fromEntries(
+						this.selectedDiscordServers()
+							.filter((s) => this.discordPicks.has(s.id))
+							.map((s) => [s.id, this.discordPicks.get(s.id)!])
+					),
 				})
 			);
 
@@ -828,9 +972,9 @@ class PublishModal extends Modal {
 				continue;
 			}
 			const platforms = detail.postPlatforms ?? [];
-			const pending = platforms.some(
-				(p) => !["published", "failed"].includes(p.status)
-			);
+			// published, failed and unconfirmed are final; pending, publishing
+			// and processing are still on their way.
+			const pending = platforms.some((p) => !isTerminalPlatformStatus(p.status));
 			if (platforms.length > 0 && !pending) break;
 		}
 		return detail;
@@ -848,14 +992,25 @@ class PublishModal extends Modal {
 		}
 		for (const p of platforms) {
 			const row = this.resultsEl.createDiv({ cls: "bp-result-row" });
-			const ok = p.status === "published";
+			const outcome = platformOutcome(p.status);
+			const icon =
+				outcome === "published" ? "✓" : outcome === "failed" ? "✗" : outcome === "unconfirmed" ? "⚠" : "…";
+			const statusText = outcome === "unconfirmed" ? "not confirmed" : p.status;
 			row.createSpan({
-				text: `${ok ? "✓" : p.status === "failed" ? "✗" : "…"} ${platformLabel(p.platform)}: ${p.status}`,
-				cls: ok ? "bp-result-ok" : p.status === "failed" ? "bp-error-text" : "",
+				text: `${icon} ${platformLabel(p.platform)}: ${statusText}`,
+				cls:
+					outcome === "published"
+						? "bp-result-ok"
+						: outcome === "pending"
+							? ""
+							: "bp-error-text",
 			});
 			if (p.platformUrl) {
 				row.createSpan({ text: " — " });
 				row.createEl("a", { text: "view post", href: p.platformUrl });
+			}
+			if (outcome === "unconfirmed") {
+				row.createDiv({ cls: "bp-error-text bp-result-error", text: UNCONFIRMED_MESSAGE });
 			}
 			if (p.errorMessage) {
 				row.createDiv({ cls: "bp-error-text bp-result-error", text: p.errorMessage });

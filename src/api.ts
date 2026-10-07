@@ -2,7 +2,7 @@
  * Thin BulkPublish API client built on Obsidian's requestUrl (no CORS issues).
  */
 import { requestUrl, RequestUrlParam } from "obsidian";
-import type { Channel, ChannelSet, XCosts } from "./lib";
+import type { Channel, ChannelSet, DiscordChannelOption, XCosts } from "./lib";
 import { computeParts } from "./lib";
 
 export const DEFAULT_BASE_URL = "https://app.bulkpublish.com";
@@ -89,6 +89,14 @@ export interface CreatePostBody {
 	 * omitting is NOT the same as sending false.
 	 */
 	linkTrackingOverride?: boolean;
+	/** Set together with requestApproval when no time was picked. */
+	publishWhenApproved?: boolean;
+	/**
+	 * Per-platform options. Discord: `{ discord: { [channelId]: { channelId } } }`,
+	 * where the outer key is the BulkPublish channel id and the inner channelId
+	 * is the Discord text channel to post in.
+	 */
+	platformSpecific?: { discord: Record<string, { channelId: string }> };
 }
 
 export class BulkPublishError extends Error {
@@ -187,6 +195,21 @@ export class BulkPublishClient {
 			path: "/api/channel-sets",
 		});
 		return Array.isArray(data) ? data : [];
+	}
+
+	/**
+	 * GET /api/channels/{id}/options → { type, items }. For a Discord channel
+	 * `type` is "channels" and the items are the server's postable text
+	 * channels ({ id, name }).
+	 */
+	async getDiscordChannels(channelId: string): Promise<DiscordChannelOption[]> {
+		const data = await this.request<{ type?: string | null; items?: DiscordChannelOption[] }>({
+			method: "GET",
+			path: `/api/channels/${encodeURIComponent(channelId)}/options`,
+		});
+		return Array.isArray(data?.items)
+			? data.items.map((o) => ({ id: String(o.id), name: String(o.name ?? "") }))
+			: [];
 	}
 
 	async getQuotaUsage(): Promise<QuotaUsage> {

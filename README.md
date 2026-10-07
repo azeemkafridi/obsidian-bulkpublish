@@ -11,6 +11,7 @@ Publish the current note — or just a selection — to 15 social media platform
 - **Team approval** — hold a post for review, and approve/reject the queue from a command
 - **Embedded images/videos** (`![[photo.png]]`) detected and uploaded with the post — pick which ones to include
 - **"Before you publish" panel**: posts today/this month vs your plan limits, plus an X cost estimate and credit balance
+- **Discord channel picker** — when a Discord server is selected, choose which of its text channels to post in
 - **Per-platform results** after publishing (status, error, link to the live post), written back into the note's frontmatter
 - Per-platform **character-limit validation** before you can hit Publish
 
@@ -62,6 +63,7 @@ bulkpublish-channels: [x, linkedin]   # platform names or account names; presele
 bulkpublish-schedule: 2026-07-01T09:00 # local time; prefills the schedule picker
 bulkpublish-request-approval: true     # hold this post for team approval
 bulkpublish-link-tracking: on          # on | off — omit to use your organization setting
+bulkpublish-discord-channel: general   # Discord text channel to post in (name, "#name" or id)
 share-url: https://myblog.com/post    # used by the "Append note link" setting
 ---
 ```
@@ -70,6 +72,7 @@ share-url: https://myblog.com/post    # used by the "Append note link" setting
 - `bulkpublish-schedule` accepts `YYYY-MM-DD` (defaults to 09:00 local) or `YYYY-MM-DDTHH:mm`.
 - `bulkpublish-request-approval` accepts `true`/`false` (or `yes`/`no`) and overrides the **Request approval** setting for that note.
 - `bulkpublish-link-tracking` accepts `on`/`off` (or `true`/`false`, `yes`/`no`) and overrides [link tracking](#link-tracking) for that note. **Omit it to inherit your organization's setting** — omitting is not the same as `off`.
+- `bulkpublish-discord-channel` preselects the [Discord channel](#discord) to post in: a channel name (`general`), `"#general"` (quote it — an unquoted `#` starts a comment in YAML) or the channel's id. It applies to every Discord server selected for the note.
 
 After publishing, the plugin writes results back:
 
@@ -93,6 +96,16 @@ It is a dropdown rather than a checkbox because those are three distinct states:
 
 Links are rewritten **at publish time, per channel**, so a note going to two accounts on the same platform gets distinct codes. Shortening is **skipped** for any channel where the rewrite would push the post past that platform's character limit — a short URL is 28 characters and can be *longer* than the link it replaces, so on X (280) or Bluesky (300) a note that fit could otherwise fail to publish. The post still goes out with its original links, and records no clicks for that channel.
 
+
+## Discord
+
+A connected Discord server has many text channels, so a post to Discord needs one chosen. When a Discord server is selected, the publish modal shows a **Discord channel** dropdown listing that server's text channels. It is preselected from the note's `bulkpublish-discord-channel`, or else from the server's default channel if one is saved in BulkPublish.
+
+Publish stays blocked until every selected Discord server has a channel. If the note names a channel the server does not have, the modal says so and asks you to choose one.
+
+## Results
+
+After an immediate publish the modal shows how each platform went. *published* is the only success. *failed* shows the platform's reason. *not confirmed* means the platform could not confirm the post: it may or may not have gone out, so **check the account before retrying, or it may post twice.**
 
 ## Team approval
 
